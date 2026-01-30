@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
+
 <body class="dark-mode">
     <div id="app">
         <!-- Sidebar -->
@@ -76,40 +78,42 @@
 
     <template id="studio-template">
         <div class="view-header">
-            <h1>Content Studio</h1>
+            <div class="header-main">
+                <h1>Content Refinement Studio</h1>
+                <div id="active-topic-banner" class="active-topic-banner glass" style="display: none;">
+                    <i data-lucide="zap"></i>
+                    <span>Refining: </span><strong id="active-topic-name"></strong>
+                </div>
+            </div>
         </div>
         <div class="studio-layout">
-            <div class="analysis-panel glass">
-                <h3>Topic Clustering</h3>
-                <p>Select a topic to generate commentary.</p>
-                <div class="cluster-list" id="cluster-list"></div>
-            </div>
             <div class="generation-panel glass">
                 <div class="panel-tabs">
-                    <button class="tab-btn active" data-tab="angles">Commentary</button>
-                    <button class="tab-btn" data-tab="package">Final Package</button>
+                    <button class="tab-btn active" data-tab="angles">1. Commentary Angles</button>
+                    <button class="tab-btn" data-tab="package">2. Platform Package</button>
                 </div>
-                
+
                 <div id="angles-view" class="tab-content active">
-                    <h3>Commentary Generator</h3>
                     <div id="commentary-display" class="commentary-display">
-                        <p class="placeholder-text">Select a topic from the left to start.</p>
+                        <p class="placeholder-text">First, promote a topic from the <strong>Dashboard</strong> hub.</p>
                     </div>
                     <div class="actions">
                         <button class="btn-primary" id="btn-generate-commentary" disabled>
-                            <span>Generate Commentary</span>
+                            <i data-lucide="sparkles"></i>
+                            <span>Refine Angles</span>
                         </button>
                     </div>
                 </div>
 
                 <div id="package-view" class="tab-content">
-                    <h3>Final Output Package</h3>
                     <div id="package-display" class="package-display">
-                        <p class="placeholder-text">Generate commentary first, then create full package.</p>
+                        <p class="placeholder-text">Refine your angles first, then generate the full platform package.
+                        </p>
                     </div>
                     <div class="actions">
                         <button class="btn-primary" id="btn-generate-package" disabled>
-                            <span>Generate Full Package</span>
+                            <i data-lucide="package"></i>
+                            <span>Generate Platform Package</span>
                         </button>
                     </div>
                 </div>
@@ -137,9 +141,20 @@
         </div>
     </template>
 
+    <!-- Reading Pane -->
+    <div id="reading-pane" class="reading-pane glass">
+        <button class="close-pane" id="close-reading-pane">
+            <i data-lucide="x"></i>
+        </button>
+        <div id="reading-pane-content" class="reading-pane-content">
+            <!-- Content injected here -->
+        </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
     <script>
-      lucide.createIcons();
+        lucide.createIcons();
     </script>
 </body>
+
 </html>

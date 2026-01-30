@@ -3,6 +3,7 @@ from app.database import SessionLocal
 from app.ingestion.rss import fetch_rss_feeds
 from app.ingestion.reddit import fetch_reddit_content
 from app.analysis.ranker import ContentRanker
+from app.analysis.enrichment import EnrichmentService
 import os
 
 def run_ingestion_cycle():
@@ -15,6 +16,10 @@ def run_ingestion_cycle():
         print("Ranking items...")
         ranker = ContentRanker(db)
         ranker.calculate_final_scores()
+
+        print("Enriching items (Paywall & Summary pass)...")
+        enricher = EnrichmentService()
+        enricher.enrich_batch(db)
         
         print("Ingestion cycle completed.")
     except Exception as e:

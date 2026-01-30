@@ -7,6 +7,7 @@ from app.ingestion.reddit import fetch_reddit_content
 from app.analysis.ranker import ContentRanker
 from app.analysis.clustering import TopicClusterer
 from app.analysis.commentary import ContentEngine
+from app.analysis.enrichment import EnrichmentService
 from app.models import ContentItem
 
 def run_daily_pipeline():
@@ -24,6 +25,10 @@ def run_daily_pipeline():
         print("[2/4] Scoring and ranking controversy/engagement...")
         ranker = ContentRanker(db)
         ranker.calculate_final_scores()
+
+        print("[2.5/4] Enriching items (Paywall & Summary pass)...")
+        enricher = EnrichmentService()
+        enricher.enrich_batch(db)
         
         # STEP 4: Cluster and Select
         print("[3/4] Clustering and selecting top topics...")

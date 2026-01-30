@@ -10,30 +10,50 @@ document.addEventListener('DOMContentLoaded', () => {
         admin: () => renderAdmin()
     };
 
-    function navigate(view) {
-        // Update UI
+    async function navigate(view) {
         navItems.forEach(item => {
             item.classList.remove('active');
             if (item.dataset.view === view) item.classList.add('active');
         });
 
-        // Run Route
         const template = document.getElementById(`${view}-template`);
+        if (!template) {
+            console.error(`Template ${view}-template not found!`);
+            return;
+        }
+
+        console.log(`Navigating to ${view}`);
         viewContainer.innerHTML = '';
         viewContainer.appendChild(template.content.cloneNode(true));
 
-        if (routes[view]) routes[view]();
+        if (routes[view]) {
+            console.log(`Executing route for ${view}`);
+            try {
+                await routes[view]();
+            } catch (e) {
+                console.error(`Error in route ${view}:`, e);
+            }
+        }
 
-        // Refresh icons
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     // Dashboard Logic
     async function renderDashboard(filter = 'all', query = '') {
         const feedGrid = document.getElementById('feed-grid');
+        const filterPills = document.getElementById('filter-pills');
         feedGrid.innerHTML = '<div class="loading-shimmer"></div>'.repeat(6);
 
         try {
+            // Fetch and render dynamic topic filters
+            const trendingRes = await fetch('/trending');
+            const trends = await trendingRes.json();
+
+            filterPills.innerHTML = `<button class="pill ${filter === 'all' ? 'active' : ''}" data-filter="all">All</button>`;
+            Object.entries(trends).forEach(([name, count]) => {
+                filterPills.innerHTML += `<button class="pill ${filter === name ? 'active' : ''}" data-filter="${name}">${name} <small>(${count})</small></button>`;
+            });
+
             let url = `/items?limit=24`;
             if (filter !== 'all') url += `&q=${filter}`;
             if (query) url += `&q=${query}`;
@@ -47,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 feedGrid.appendChild(card);
             });
         } catch (error) {
-            console.error('Error fetching items:', error);
+            console.error('Error fetching items/trends:', error);
             feedGrid.innerHTML = '<p class="error">Failed to load content. Please try again.</p>';
         }
     }
@@ -55,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createCard(item) {
         const div = document.createElement('div');
         div.className = 'content-card glass';
+        div.style.cursor = 'pointer';
 
         const typeClass = item.source_type === 'news' ? 'tag-news' : 'tag-reddit';
         const typeLabel = item.source_type === 'news' ? 'News' : 'Reddit';
@@ -63,9 +84,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const score = metrics.score !== undefined ? `<div class="metric"><i data-lucide="arrow-big-up"></i>${metrics.score}</div>` : '';
         const comments = metrics.num_comments !== undefined ? `<div class="metric"><i data-lucide="message-square"></i>${metrics.num_comments}</div>` : '';
 
+        const statusTag = item.is_unavailable ?
+            '<span class="card-tag tag-unavailable">Unavailable</span>' :
+            (item.enrichment_status === 'generated' ? '<span class="card-tag tag-refined">Summary (AI)</span>' : '');
+
         div.innerHTML = `
-            <span class="card-tag ${typeClass}">${typeLabel}</span>
-            <a href="${item.url}" target="_blank" class="card-title">${item.title}</a>
+            <div class="card-tags">
+                <span class="card-tag ${typeClass}">${typeLabel}</span>
+                ${statusTag}
+            </div>
+            <div class="card-title">${item.title}</div>
             <p class="card-summary">${item.summary || 'No summary available.'}</p>
             <div class="card-footer">
                 <span class="card-source">${item.source_name}</span>
@@ -75,28 +103,134 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="metric"><i data-lucide="globe"></i>${item.country}</div>
                 </div>
             </div>
+            <div class="card-promote-overlay">
+                <button class="btn-promote-studio-icon" title="Send to Studio">
+                    <i data-lucide="zap"></i>
+                </button>
+            </div>
         `;
+
+        const btnPromoteIcon = div.querySelector('.btn-promote-studio-icon');
+        btnPromoteIcon.onclick = async (e) => {
+            e.stopPropagation();
+            btnPromoteIcon.disabled = true;
+            btnPromoteIcon.innerHTML = '<i class="loading-spinner"></i>';
+            try {
+                const res = await fetch(`/items/${item.id}/promote`, { method: 'POST' });
+                const data = await res.json();
+                if (data.cluster_id) {
+                    window.preSelectedCluster = data.cluster_id;
+                    navigate('studio');
+                }
+            } catch (e) {
+                console.error('Promotion failed:', e);
+                btnPromoteIcon.disabled = false;
+                btnPromoteIcon.innerHTML = '<i data-lucide="zap"></i>';
+            }
+        };
+
+        div.onclick = (e) => {
+            if (e.target.closest('.btn-promote-studio-icon')) return;
+            e.preventDefault();
+            openReadingPane(item);
+        };
+
         return div;
     }
+
+    function openReadingPane(item) {
+        const pane = document.getElementById('reading-pane');
+        const content = document.getElementById('reading-pane-content');
+
+        const typeLabel = item.source_type === 'news' ? 'News' : 'Reddit';
+
+        content.innerHTML = `
+            <div class="reading-pane-meta">
+                <span class="badge active">${typeLabel}</span>
+                <span>${item.source_name}</span>
+                <span>${item.country}</span>
+                <span>${new Date(item.timestamp).toLocaleDateString()}</span>
+            </div>
+            <h2>${item.title}</h2>
+            <div class="reading-pane-summary">
+                <p>${item.summary || 'No summary available.'}</p>
+                ${item.enrichment_status === 'generated' ? '<p class="info-alert" style="font-size: 0.8em; color: var(--clr-info);">Note: This summary was generated by AI due to source restrictions.</p>' : ''}
+            </div>
+            <div class="reading-pane-footer" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="${item.url}" target="_blank" class="btn-secondary" style="text-decoration: none; font-size: 0.8em; padding: 10px 15px; background: rgba(255,255,255,0.05); border-radius: 8px; color: white;">
+                    <i data-lucide="external-link"></i> View Original
+                </a>
+                <button id="btn-promote-studio" class="btn-primary" style="font-size: 0.8em; padding: 10px 15px;">
+                    <i data-lucide="zap"></i> Send to Studio
+                </button>
+            </div>
+        `;
+
+        const btnPromote = document.getElementById('btn-promote-studio');
+        if (btnPromote) {
+            btnPromote.onclick = async () => {
+                btnPromote.disabled = true;
+                btnPromote.innerHTML = '<i class="loading-spinner"></i> Processing...';
+                try {
+                    const res = await fetch(`/items/${item.id}/promote`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.cluster_id) {
+                        window.preSelectedCluster = data.cluster_id;
+                        closeReadingPane();
+                        navigate('studio');
+                    }
+                } catch (e) {
+                    console.error('Promotion failed:', e);
+                    btnPromote.disabled = false;
+                    btnPromote.innerHTML = '<i data-lucide="zap"></i> Send to Studio';
+                }
+            };
+        }
+
+        pane.classList.add('active');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeReadingPane() {
+        document.getElementById('reading-pane').classList.remove('active');
+    }
+
+    const btnClosePane = document.getElementById('close-reading-pane');
+    if (btnClosePane) btnClosePane.onclick = closeReadingPane;
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeReadingPane();
+    });
 
     // Studio Logic
     let selectedCluster = null;
 
     async function renderStudio() {
-        const response = await fetch('/trending');
-        const trends = await response.json();
-        const clusterList = document.getElementById('cluster-list');
+        console.log('Rendering Studio...');
         const btnGenerateCommentary = document.getElementById('btn-generate-commentary');
         const btnGeneratePackage = document.getElementById('btn-generate-package');
+        const banner = document.getElementById('active-topic-banner');
+        const topicNameDisplay = document.getElementById('active-topic-name');
 
-        clusterList.innerHTML = Object.entries(trends).map(([name, count]) => `
-            <div class="cluster-item" data-cluster="${name}">
-                <span class="cluster-name">${name}</span>
-                <span class="cluster-count">${count} items</span>
-            </div>
-        `).join('');
+        // Handle pre-selection or existing selection
+        if (window.preSelectedCluster) {
+            selectedCluster = window.preSelectedCluster;
+            window.preSelectedCluster = null;
+        }
 
-        // Tab Switching
+        if (selectedCluster) {
+            btnGenerateCommentary.disabled = false;
+            btnGeneratePackage.disabled = false;
+            banner.style.display = 'flex';
+            topicNameDisplay.textContent = selectedCluster;
+
+            // Auto-fetch if selected
+            fetchCommentary(selectedCluster);
+            fetchPackage(selectedCluster);
+        } else {
+            banner.style.display = 'none';
+        }
+
         const tabs = document.querySelectorAll('.tab-btn');
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
@@ -108,56 +242,44 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Handle cluster selection
-        document.querySelectorAll('.cluster-item').forEach(item => {
-            item.addEventListener('click', async () => {
-                document.querySelectorAll('.cluster-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                selectedCluster = item.dataset.cluster;
-                btnGenerateCommentary.disabled = false;
-                btnGeneratePackage.disabled = false;
-
-                // Fetch existing commentary & package
-                fetchCommentary(selectedCluster);
-                fetchPackage(selectedCluster);
-            });
-        });
-
         btnGenerateCommentary.onclick = async () => {
             if (!selectedCluster) return;
             btnGenerateCommentary.disabled = true;
-            btnGenerateCommentary.innerHTML = '<span>Generating...</span>';
+            btnGenerateCommentary.innerHTML = '<span><i class="dot pulse"></i> Generating...</span>';
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_angles`, { method: 'POST' });
                 const data = await response.json();
                 btnGenerateCommentary.disabled = false;
-                btnGenerateCommentary.innerHTML = '<span>Generate Commentary</span>';
+                btnGenerateCommentary.innerHTML = '<i data-lucide="sparkles"></i> <span>Refine Angles</span>';
                 if (data.angles) renderCommentary(data);
+                else alert('Error: ' + (data.error || 'Failed to generate commentary.'));
             } catch (e) {
+                console.error('Error in Generate Commentary:', e);
                 btnGenerateCommentary.disabled = false;
-                btnGenerateCommentary.innerHTML = '<span>Generate Commentary</span>';
-                console.error(e);
+                btnGenerateCommentary.innerHTML = '<i data-lucide="sparkles"></i> <span>Refine Angles</span>';
             }
         };
 
         btnGeneratePackage.onclick = async () => {
             if (!selectedCluster) return;
             btnGeneratePackage.disabled = true;
-            btnGeneratePackage.innerHTML = '<span>Generating Package...</span>';
+            btnGeneratePackage.innerHTML = '<i data-lucide="loader"></i> <span>Generating Package...</span>';
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_full_package`, { method: 'POST' });
                 const data = await response.json();
                 btnGeneratePackage.disabled = false;
-                btnGeneratePackage.innerHTML = '<span>Generate Full Package</span>';
+                btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
                 if (data.safe_article) renderPackage(data);
             } catch (e) {
                 btnGeneratePackage.disabled = false;
-                btnGeneratePackage.innerHTML = '<span>Generate Full Package</span>';
+                btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
                 console.error(e);
             }
         };
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     async function fetchCommentary(cluster_id) {
@@ -167,8 +289,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/topics/${cluster_id}/angles`);
             const data = await response.json();
             if (data && data.angles) renderCommentary(data);
-            else display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Generate" to start.</p>';
-        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate" to start.</p>'; }
+            else display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Refine Angles" to start.</p>';
+        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Refine Angles" to start.</p>'; }
     }
 
     async function fetchPackage(cluster_id) {
@@ -178,26 +300,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/topics/${cluster_id}/package`);
             const data = await response.json();
             if (data && data.safe_article) renderPackage(data);
-            else display.innerHTML = '<p class="placeholder-text">No package generated. Click "Generate Full Package" to start.</p>';
-        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate Full Package" to start.</p>'; }
+            else display.innerHTML = '<p class="placeholder-text">No package generated. Click "Generate Platform Package" to start.</p>';
+        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate Platform Package" to start.</p>'; }
     }
 
     function renderCommentary(data) {
         const display = document.getElementById('commentary-display');
+        if (!display) return;
+
         const anglesHtml = data.angles.map(angle => `
-            <div class="angle-card">
-                <div class="angle-type">${angle.type}</div>
-                <div class="angle-content">${angle.content}</div>
+            <div class="angle-card" style="margin-bottom: 12px; padding: 12px; border-left: 4px solid var(--clr-primary-500); background: rgba(255,255,255,0.03);">
+                <div class="angle-type" style="color: var(--clr-primary-500); font-weight: bold; font-size: 0.8em; margin-bottom: 4px;">${angle.type}</div>
+                <div class="angle-content" style="font-size: 0.9em;">${angle.content}</div>
             </div>
         `).join('');
+
         display.innerHTML = `
             ${anglesHtml}
-            <div class="facebook-card">
-                <div class="facebook-header">
+            <div class="facebook-card" style="margin-top: 16px; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--clr-primary-500); border-radius: 8px;">
+                <div class="facebook-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: bold; color: #60a5fa;">
                     <i data-lucide="facebook"></i>
                     <span>Strongest Angle (Facebook Ready)</span>
                 </div>
-                <div class="facebook-content">${data.strongest_angle_html}</div>
+                <div class="facebook-content" style="white-space: pre-wrap; font-size: 0.95em;">${data.strongest_angle_html || 'No preview available.'}</div>
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -205,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderPackage(data) {
         const display = document.getElementById('package-display');
+        if (!display) return;
 
         const headlinesHtml = data.safe_headlines.map(h => `<div class="headline-item">${h}</div>`).join('');
         const slidesHtml = data.carousel_slides.map(s => `<div class="beat-card"><div class="beat-number">Slide ${s.slide_number}</div>${s.text}</div>`).join('');
@@ -215,18 +341,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="section-label"><i data-lucide="megaphone"></i> Scroll-Stopping Headlines</div>
                 ${headlinesHtml}
             </div>
-
             <div class="view-section">
                 <div class="section-label"><i data-lucide="file-text"></i> Safe Article (Revised)</div>
                 <div class="article-body">${data.safe_article.replace(/\n/g, '<br>')}</div>
             </div>
-
             <div class="view-section">
                 <div class="section-label"><i data-lucide="message-square"></i> Engagement CTA & Pinned Comment</div>
                 <div class="cta-box">${data.safe_cta}</div>
                 <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;"><b>Pinned:</b> ${data.pinned_comment}</p>
             </div>
-
             <div class="view-section">
                 <div class="section-label"><i data-lucide="layout"></i> Carousel Assets (Visual Media)</div>
                 <div class="beats-grid">${slidesHtml}</div>
@@ -238,13 +361,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Admin Logic
     async function renderAdmin() {
-        const response = await fetch('/items?limit=1'); // Hack to get total from header if we had it, but for now just mock or fetch a count
-        document.getElementById('stat-total-items').textContent = '470+'; // Mock for now
-
+        document.getElementById('stat-total-items').textContent = '470+';
         const sourceListUi = document.getElementById('source-list-ui');
-        // This would ideally come from an /admin/sources endpoint
         sourceListUi.innerHTML = `
             <li>CBC News - Politics <span class="badge active">Active</span></li>
             <li>The Hindu - National <span class="badge active">Active</span></li>
@@ -252,7 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    // Event Listeners
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
@@ -283,6 +401,5 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Initialize
     navigate('dashboard');
 });

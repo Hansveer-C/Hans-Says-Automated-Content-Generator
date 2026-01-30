@@ -6,6 +6,7 @@ from app.database import init_db, get_db, SessionLocal
 from app.models import Source, ContentItem, SourceType, TopicCommentary
 from app.scheduler import start_scheduler
 from app.analysis.commentary import ContentEngine
+from app.analysis.clustering import TopicClusterer
 import uvicorn
 import os
 
@@ -87,6 +88,18 @@ def get_items(
         
     items = query.limit(limit).all()
     return items
+
+@app.post("/items/{item_id}/promote")
+def promote_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
+    if not item:
+        return {"error": "Item not found"}
+    
+    clusterer = TopicClusterer()
+    item.cluster_id = clusterer.categorize(item.title, item.summary)
+    db.commit()
+    
+    return {"cluster_id": item.cluster_id}
 
 @app.get("/trending")
 def get_trending_topics(db: Session = Depends(get_db)):

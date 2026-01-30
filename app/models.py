@@ -43,6 +43,8 @@ class ContentItem(Base):
     used_for_content = Column(Boolean, default=False)
     
     # Metadata
+    is_unavailable = Column(Boolean, default=False)
+    enrichment_status = Column(String, default="original") # 'original', 'generated', 'failed'
     ingested_at = Column(DateTime, server_default=func.now())
     raw_json = Column(Text)  # Original payload
 
