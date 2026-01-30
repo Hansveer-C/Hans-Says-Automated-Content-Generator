@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HansSays | Political Intelligence</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="dark-mode">
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="logo">
+                <span class="logo-icon">H</span>
+                <span class="logo-text">HansSays</span>
+            </div>
+            <nav>
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-view="studio">
+                    <i data-lucide="pen-tool"></i>
+                    <span>Studio</span>
+                </a>
+                <a href="#" class="nav-item" data-view="admin">
+                    <i data-lucide="settings"></i>
+                    <span>Admin</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot pulse"></span>
+                    <span>Live Engine</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content-area">
+            <header class="top-bar">
+                <div class="search-container glass">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="global-search" placeholder="Search political intelligence...">
+                </div>
+                <div class="user-profile">
+                    <div class="avatar glass">H</div>
+                </div>
+            </header>
+
+            <section id="view-container">
+                <!-- Views will be injected here -->
+            </section>
+        </main>
+    </div>
+
+    <!-- Templates -->
+    <template id="dashboard-template">
+        <div class="view-header">
+            <h1>Feed Dashboard</h1>
+            <div class="filter-pills" id="filter-pills">
+                <button class="pill active" data-filter="all">All</button>
+                <button class="pill" data-filter="immigration">Immigration</button>
+                <button class="pill" data-filter="elections">Elections</button>
+                <button class="pill" data-filter="economy">Economy</button>
+                <button class="pill" data-filter="policy">Policy</button>
+            </div>
+        </div>
+        <div class="feed-grid" id="feed-grid">
+            <!-- Cards injected here -->
+            <div class="loading-shimmer"></div>
+        </div>
+    </template>
+
+    <template id="studio-template">
+        <div class="view-header">
+            <h1>Content Studio</h1>
+        </div>
+        <div class="studio-layout">
+            <div class="analysis-panel glass">
+                <h3>Topic Clustering</h3>
+                <p>System is analyzing latest 400 items...</p>
+                <div class="cluster-list" id="cluster-list"></div>
+            </div>
+            <div class="generation-panel glass">
+                <h3>Generator</h3>
+                <textarea placeholder="Select items to generate summary..."></textarea>
+                <button class="btn-primary">Generate Report</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="admin-template">
+        <div class="view-header">
+            <h1>System Admin</h1>
+        </div>
+        <div class="admin-grid">
+            <div class="stat-card glass">
+                <span class="stat-label">Total Items</span>
+                <span class="stat-value" id="stat-total-items">--</span>
+            </div>
+            <div class="stat-card glass">
+                <span class="stat-label">Active Sources</span>
+                <span class="stat-value">12</span>
+            </div>
+            <div class="source-list glass">
+                <h3>Source Management</h3>
+                <ul id="source-list-ui"></ul>
+            </div>
+        </div>
+    </template>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+      lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+app.db
+.vscode/
+.idea/
+*.json
+feed_pull_*.json
