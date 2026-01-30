@@ -495,3 +495,111 @@ nav {
         background-position: -200% 0;
     }
 }
+
+/* Commentary Display & Angle Cards */
+.commentary-display {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+    min-height: 300px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: var(--sp-2);
+}
+
+.placeholder-text {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: var(--sp-12);
+}
+
+.angle-card {
+    padding: var(--sp-4);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 4px solid var(--clr-primary-500);
+}
+
+.angle-type {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    text-transform: uppercase;
+    color: var(--clr-primary-500);
+    margin-bottom: var(--sp-2);
+}
+
+.angle-content {
+    font-size: var(--fs-sm);
+    line-height: var(--lh-relaxed);
+}
+
+.facebook-card {
+    margin-top: var(--sp-4);
+    padding: var(--sp-6);
+    border-radius: var(--radius-xl);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.05));
+    border: 1px solid var(--clr-primary-500);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+}
+
+.facebook-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-4);
+    font-weight: var(--fw-bold);
+    color: #60a5fa;
+}
+
+.facebook-content {
+    font-size: var(--fs-base);
+    white-space: pre-wrap;
+    line-height: var(--lh-relaxed);
+}
+
+.actions {
+    margin-top: var(--sp-6);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-primary {
+    background: var(--clr-primary-600);
+    color: white;
+    border: none;
+    padding: var(--sp-3) var(--sp-8);
+    border-radius: var(--radius-md);
+    font-weight: var(--fw-bold);
+    cursor: pointer;
+    transition: var(--tr-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--clr-primary-500);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cluster-item {
+    cursor: pointer;
+    transition: var(--tr-fast);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-md);
+    margin-bottom: 2px;
+}
+
+.cluster-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.cluster-item.active {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 4px solid var(--clr-primary-500);
+}

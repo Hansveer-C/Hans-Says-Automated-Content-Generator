@@ -80,17 +80,99 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Studio Logic
+    let selectedCluster = null;
+
     async function renderStudio() {
         const response = await fetch('/trending');
         const trends = await response.json();
         const clusterList = document.getElementById('cluster-list');
+        const btnGenerate = document.getElementById('btn-generate-commentary');
 
         clusterList.innerHTML = Object.entries(trends).map(([name, count]) => `
-            <div class="cluster-item">
+            <div class="cluster-item" data-cluster="${name}">
                 <span class="cluster-name">${name}</span>
                 <span class="cluster-count">${count} items</span>
             </div>
         `).join('');
+
+        // Handle cluster selection
+        document.querySelectorAll('.cluster-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                document.querySelectorAll('.cluster-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                selectedCluster = item.dataset.cluster;
+                btnGenerate.disabled = false;
+
+                // Fetch existing commentary
+                fetchCommentary(selectedCluster);
+            });
+        });
+
+        btnGenerate.onclick = async () => {
+            if (!selectedCluster) return;
+
+            btnGenerate.disabled = true;
+            btnGenerate.innerHTML = '<span>Generating...</span>';
+
+            try {
+                const response = await fetch(`/topics/${selectedCluster}/generate_angles`, { method: 'POST' });
+                const data = await response.json();
+
+                btnGenerate.disabled = false;
+                btnGenerate.innerHTML = '<span>Generate Commentary</span>';
+
+                if (data.angles) {
+                    renderCommentary(data);
+                } else {
+                    document.getElementById('commentary-display').innerHTML = `<p class="error">${data.error || 'Failed to generate.'}</p>`;
+                }
+            } catch (e) {
+                btnGenerate.disabled = false;
+                btnGenerate.innerHTML = '<span>Generate Commentary</span>';
+                console.error(e);
+            }
+        };
+    }
+
+    async function fetchCommentary(cluster_id) {
+        const display = document.getElementById('commentary-display');
+        display.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>'.repeat(3);
+
+        try {
+            const response = await fetch(`/topics/${cluster_id}/angles`);
+            const data = await response.json();
+
+            if (data && data.angles) {
+                renderCommentary(data);
+            } else {
+                display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Generate" to start.</p>';
+            }
+        } catch (e) {
+            display.innerHTML = '<p class="placeholder-text">Click "Generate" to start.</p>';
+        }
+    }
+
+    function renderCommentary(data) {
+        const display = document.getElementById('commentary-display');
+
+        const anglesHtml = data.angles.map(angle => `
+            <div class="angle-card">
+                <div class="angle-type">${angle.type}</div>
+                <div class="angle-content">${angle.content}</div>
+            </div>
+        `).join('');
+
+        display.innerHTML = `
+            ${anglesHtml}
+            <div class="facebook-card">
+                <div class="facebook-header">
+                    <i data-lucide="facebook"></i>
+                    <span>Strongest Angle (Facebook Ready)</span>
+                </div>
+                <div class="facebook-content">${data.strongest_angle_html}</div>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     // Admin Logic

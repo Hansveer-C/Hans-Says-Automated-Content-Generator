@@ -3,8 +3,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import init_db, get_db, SessionLocal
-from app.models import Source, ContentItem, SourceType
+from app.models import Source, ContentItem, SourceType, TopicCommentary
 from app.scheduler import start_scheduler
+from app.analysis.commentary import CommentaryGenerator
 import uvicorn
 import os
 
@@ -102,6 +103,24 @@ def get_trending_topics(db: Session = Depends(get_db)):
         results[category] = count
         
     return results
+
+@app.post("/topics/{cluster_id}/generate_angles")
+def generate_topic_angles(cluster_id: str, db: Session = Depends(get_db)):
+    generator = CommentaryGenerator()
+    commentary = generator.generate_for_cluster(db, cluster_id)
+    if not commentary:
+        return {"error": "No items found for this topic"}
+    return commentary
+
+@app.get("/topics/{cluster_id}/angles")
+def get_topic_angles(cluster_id: str, db: Session = Depends(get_db)):
+    commentary = db.query(TopicCommentary).filter(
+        TopicCommentary.cluster_id == cluster_id
+    ).order_by(TopicCommentary.generated_at.desc()).first()
+    
+    if not commentary:
+        return {"error": "No commentary found for this topic"}
+    return commentary
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

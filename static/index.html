@@ -81,13 +81,19 @@
         <div class="studio-layout">
             <div class="analysis-panel glass">
                 <h3>Topic Clustering</h3>
-                <p>System is analyzing latest 400 items...</p>
+                <p>Select a topic to generate commentary.</p>
                 <div class="cluster-list" id="cluster-list"></div>
             </div>
             <div class="generation-panel glass">
-                <h3>Generator</h3>
-                <textarea placeholder="Select items to generate summary..."></textarea>
-                <button class="btn-primary">Generate Report</button>
+                <h3>Commentary Generator</h3>
+                <div id="commentary-display" class="commentary-display">
+                    <p class="placeholder-text">Select a topic from the left to start.</p>
+                </div>
+                <div class="actions">
+                    <button class="btn-primary" id="btn-generate-commentary" disabled>
+                        <span>Generate Commentary</span>
+                    </button>
+                </div>
             </div>
         </div>
     </template>

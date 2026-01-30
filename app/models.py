@@ -44,3 +44,12 @@ class ContentItem(Base):
     # Metadata
     ingested_at = Column(DateTime, server_default=func.now())
     raw_json = Column(Text)  # Original payload
+
+class TopicCommentary(Base):
+    __tablename__ = "topic_commentaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(String, index=True)
+    angles = Column(JSON)  # Store list of 3 angles (Critical, Comparative, Accountability)
+    strongest_angle_html = Column(Text)  # The Facebook-ready version (formatted with line breaks etc)
+    generated_at = Column(DateTime, server_default=func.now())
