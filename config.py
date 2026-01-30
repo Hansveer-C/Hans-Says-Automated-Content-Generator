@@ -28,3 +28,17 @@ RSS_FEEDS = {
         "Times of India - National": "https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms"
     }
 }
+
+# Controversy Analysis Configuration
+CONTROVERSIAL_TOPICS = [
+    "abortion", "gun control", "capital punishment", "euthanasia", 
+    "affirmative action", "climate change denial", "vaccine mandates",
+    "khalistan", "kashmir conflict", "caste discrimination", "caa", "nrc",
+    "trucker convoy", "freedom convoy", "residential schools"
+]
+
+STRONG_LANGUAGE = [
+    "fuck", "shit", "damn", "hell", "asshole", "bitch", "bastard",
+    "idiot", "traitor", "scum", "thug", "corrupt", "nazi", "fascist",
+    "racist", "bigot", "hate"
+]

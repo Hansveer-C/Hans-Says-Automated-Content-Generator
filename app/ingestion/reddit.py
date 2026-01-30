@@ -2,6 +2,7 @@ import requests
 import os
 from sqlalchemy.orm import Session
 from app.models import ContentItem, Source, SourceType
+from app.analysis.controversy import ControversyAnalyzer
 from datetime import datetime
 import json
 from dotenv import load_dotenv
@@ -57,6 +58,9 @@ def fetch_reddit_content(db: Session):
                     existing_item.engagement_metrics = metrics
                     continue
 
+                analyzer = ControversyAnalyzer()
+                controversy_score = analyzer.analyze(item.get('title', ''), item.get('selftext') if item.get('is_self') else item.get('url'))
+
                 new_item = ContentItem(
                     external_id=external_id,
                     source_type=SourceType.REDDIT,
@@ -67,6 +71,7 @@ def fetch_reddit_content(db: Session):
                     url=f"https://reddit.com{item.get('permalink')}",
                     timestamp=datetime.fromtimestamp(item.get('created_utc', 0)),
                     engagement_metrics=metrics,
+                    controversy_score=controversy_score,
                     raw_json=json.dumps({"id": external_id})
                 )
                 db.add(new_item)

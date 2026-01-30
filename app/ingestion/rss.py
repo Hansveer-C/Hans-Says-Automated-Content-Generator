@@ -2,6 +2,7 @@ import feedparser
 import requests
 from sqlalchemy.orm import Session
 from app.models import ContentItem, Source, SourceType
+from app.analysis.controversy import ControversyAnalyzer
 from datetime import datetime
 import time
 import json
@@ -34,6 +35,9 @@ def fetch_rss_feeds(db: Session):
                 else:
                     pub_date = datetime.now()
 
+                analyzer = ControversyAnalyzer()
+                controversy_score = analyzer.analyze(entry.get('title', ''), entry.get('summary', entry.get('description', '')))
+
                 new_item = ContentItem(
                     external_id=entry.link,
                     source_type=SourceType.NEWS,
@@ -44,6 +48,7 @@ def fetch_rss_feeds(db: Session):
                     url=entry.link,
                     timestamp=pub_date,
                     engagement_metrics={}, # News rarely has engagement in RSS
+                    controversy_score=controversy_score,
                     raw_json=json.dumps(entry)
                 )
                 db.add(new_item)
