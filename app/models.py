@@ -37,6 +37,7 @@ class ContentItem(Base):
     # Analysis & Scoring Fields
     engagement_metrics = Column(JSON, default={})  # Store hits, comments, upvotes, etc.
     controversy_score = Column(Float, default=0.0)
+    controversy_reason = Column(Text, nullable=True) # Reason for the controversy score
     final_score = Column(Float, default=0.0)
     cluster_id = Column(String, index=True, nullable=True)
     used_for_content = Column(Boolean, default=False)
@@ -53,3 +54,23 @@ class TopicCommentary(Base):
     angles = Column(JSON)  # Store list of 3 angles (Critical, Comparative, Accountability)
     strongest_angle_html = Column(Text)  # The Facebook-ready version (formatted with line breaks etc)
     generated_at = Column(DateTime, server_default=func.now())
+
+class TopicPackage(Base):
+    """
+    Stores the full 'Final Output Package' for a selected topic cluster.
+    """
+    __tablename__ = "topic_packages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(String, index=True)
+    date = Column(DateTime, server_default=func.now(), index=True)
+    
+    # Package Elements
+    safe_article = Column(Text)
+    safe_headlines = Column(JSON) # List of 3 headlines
+    safe_cta = Column(String)
+    pinned_comment = Column(Text)
+    carousel_slides = Column(JSON) # List of slide objects
+    visual_directions = Column(JSON) # List of direction objects
+    recommended_post_time = Column(DateTime)
+    scheduling_metadata = Column(JSON) # timezone, why_this_time_works

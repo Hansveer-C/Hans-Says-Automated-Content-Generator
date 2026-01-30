@@ -85,14 +85,33 @@
                 <div class="cluster-list" id="cluster-list"></div>
             </div>
             <div class="generation-panel glass">
-                <h3>Commentary Generator</h3>
-                <div id="commentary-display" class="commentary-display">
-                    <p class="placeholder-text">Select a topic from the left to start.</p>
+                <div class="panel-tabs">
+                    <button class="tab-btn active" data-tab="angles">Commentary</button>
+                    <button class="tab-btn" data-tab="package">Final Package</button>
                 </div>
-                <div class="actions">
-                    <button class="btn-primary" id="btn-generate-commentary" disabled>
-                        <span>Generate Commentary</span>
-                    </button>
+                
+                <div id="angles-view" class="tab-content active">
+                    <h3>Commentary Generator</h3>
+                    <div id="commentary-display" class="commentary-display">
+                        <p class="placeholder-text">Select a topic from the left to start.</p>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-primary" id="btn-generate-commentary" disabled>
+                            <span>Generate Commentary</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="package-view" class="tab-content">
+                    <h3>Final Output Package</h3>
+                    <div id="package-display" class="package-display">
+                        <p class="placeholder-text">Generate commentary first, then create full package.</p>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-primary" id="btn-generate-package" disabled>
+                            <span>Generate Full Package</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

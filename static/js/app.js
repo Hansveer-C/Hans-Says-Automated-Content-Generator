@@ -86,7 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch('/trending');
         const trends = await response.json();
         const clusterList = document.getElementById('cluster-list');
-        const btnGenerate = document.getElementById('btn-generate-commentary');
+        const btnGenerateCommentary = document.getElementById('btn-generate-commentary');
+        const btnGeneratePackage = document.getElementById('btn-generate-package');
 
         clusterList.innerHTML = Object.entries(trends).map(([name, count]) => `
             <div class="cluster-item" data-cluster="${name}">
@@ -95,40 +96,65 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
+        // Tab Switching
+        const tabs = document.querySelectorAll('.tab-btn');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`${target}-view`).classList.add('active');
+            });
+        });
+
         // Handle cluster selection
         document.querySelectorAll('.cluster-item').forEach(item => {
             item.addEventListener('click', async () => {
                 document.querySelectorAll('.cluster-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
                 selectedCluster = item.dataset.cluster;
-                btnGenerate.disabled = false;
+                btnGenerateCommentary.disabled = false;
+                btnGeneratePackage.disabled = false;
 
-                // Fetch existing commentary
+                // Fetch existing commentary & package
                 fetchCommentary(selectedCluster);
+                fetchPackage(selectedCluster);
             });
         });
 
-        btnGenerate.onclick = async () => {
+        btnGenerateCommentary.onclick = async () => {
             if (!selectedCluster) return;
-
-            btnGenerate.disabled = true;
-            btnGenerate.innerHTML = '<span>Generating...</span>';
+            btnGenerateCommentary.disabled = true;
+            btnGenerateCommentary.innerHTML = '<span>Generating...</span>';
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_angles`, { method: 'POST' });
                 const data = await response.json();
-
-                btnGenerate.disabled = false;
-                btnGenerate.innerHTML = '<span>Generate Commentary</span>';
-
-                if (data.angles) {
-                    renderCommentary(data);
-                } else {
-                    document.getElementById('commentary-display').innerHTML = `<p class="error">${data.error || 'Failed to generate.'}</p>`;
-                }
+                btnGenerateCommentary.disabled = false;
+                btnGenerateCommentary.innerHTML = '<span>Generate Commentary</span>';
+                if (data.angles) renderCommentary(data);
             } catch (e) {
-                btnGenerate.disabled = false;
-                btnGenerate.innerHTML = '<span>Generate Commentary</span>';
+                btnGenerateCommentary.disabled = false;
+                btnGenerateCommentary.innerHTML = '<span>Generate Commentary</span>';
+                console.error(e);
+            }
+        };
+
+        btnGeneratePackage.onclick = async () => {
+            if (!selectedCluster) return;
+            btnGeneratePackage.disabled = true;
+            btnGeneratePackage.innerHTML = '<span>Generating Package...</span>';
+
+            try {
+                const response = await fetch(`/topics/${selectedCluster}/generate_full_package`, { method: 'POST' });
+                const data = await response.json();
+                btnGeneratePackage.disabled = false;
+                btnGeneratePackage.innerHTML = '<span>Generate Full Package</span>';
+                if (data.safe_article) renderPackage(data);
+            } catch (e) {
+                btnGeneratePackage.disabled = false;
+                btnGeneratePackage.innerHTML = '<span>Generate Full Package</span>';
                 console.error(e);
             }
         };
@@ -137,31 +163,33 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchCommentary(cluster_id) {
         const display = document.getElementById('commentary-display');
         display.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>'.repeat(3);
-
         try {
             const response = await fetch(`/topics/${cluster_id}/angles`);
             const data = await response.json();
+            if (data && data.angles) renderCommentary(data);
+            else display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Generate" to start.</p>';
+        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate" to start.</p>'; }
+    }
 
-            if (data && data.angles) {
-                renderCommentary(data);
-            } else {
-                display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Generate" to start.</p>';
-            }
-        } catch (e) {
-            display.innerHTML = '<p class="placeholder-text">Click "Generate" to start.</p>';
-        }
+    async function fetchPackage(cluster_id) {
+        const display = document.getElementById('package-display');
+        display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(2);
+        try {
+            const response = await fetch(`/topics/${cluster_id}/package`);
+            const data = await response.json();
+            if (data && data.safe_article) renderPackage(data);
+            else display.innerHTML = '<p class="placeholder-text">No package generated. Click "Generate Full Package" to start.</p>';
+        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate Full Package" to start.</p>'; }
     }
 
     function renderCommentary(data) {
         const display = document.getElementById('commentary-display');
-
         const anglesHtml = data.angles.map(angle => `
             <div class="angle-card">
                 <div class="angle-type">${angle.type}</div>
                 <div class="angle-content">${angle.content}</div>
             </div>
         `).join('');
-
         display.innerHTML = `
             ${anglesHtml}
             <div class="facebook-card">
@@ -170,6 +198,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>Strongest Angle (Facebook Ready)</span>
                 </div>
                 <div class="facebook-content">${data.strongest_angle_html}</div>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function renderPackage(data) {
+        const display = document.getElementById('package-display');
+
+        const headlinesHtml = data.safe_headlines.map(h => `<div class="headline-item">${h}</div>`).join('');
+        const slidesHtml = data.carousel_slides.map(s => `<div class="beat-card"><div class="beat-number">Slide ${s.slide_number}</div>${s.text}</div>`).join('');
+        const directionsHtml = data.visual_directions.map(d => `<div class="beat-card"><div class="beat-number">Visual ${d.slide_number}</div>${d.direction}</div>`).join('');
+
+        display.innerHTML = `
+            <div class="view-section">
+                <div class="section-label"><i data-lucide="megaphone"></i> Scroll-Stopping Headlines</div>
+                ${headlinesHtml}
+            </div>
+
+            <div class="view-section">
+                <div class="section-label"><i data-lucide="file-text"></i> Safe Article (Revised)</div>
+                <div class="article-body">${data.safe_article.replace(/\n/g, '<br>')}</div>
+            </div>
+
+            <div class="view-section">
+                <div class="section-label"><i data-lucide="message-square"></i> Engagement CTA & Pinned Comment</div>
+                <div class="cta-box">${data.safe_cta}</div>
+                <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;"><b>Pinned:</b> ${data.pinned_comment}</p>
+            </div>
+
+            <div class="view-section">
+                <div class="section-label"><i data-lucide="layout"></i> Carousel Assets (Visual Media)</div>
+                <div class="beats-grid">${slidesHtml}</div>
+                <div class="beats-grid" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
+                    ${directionsHtml}
+                </div>
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();

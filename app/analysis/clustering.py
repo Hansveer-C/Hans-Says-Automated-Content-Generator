@@ -61,3 +61,18 @@ class TopicClusterer:
         for item in items:
             item.cluster_id = self.categorize(item.title, item.summary)
         return items
+
+    def select_top_clusters(self, items: List, n: int = 2) -> List[str]:
+        """
+        Selects the top N clusters based on aggregate final_score of their items.
+        Suitable for Facebook debate (generally higher controversy + engagement).
+        """
+        cluster_scores = {}
+        for item in items:
+            if not item.cluster_id or item.cluster_id == "other":
+                continue
+            cluster_scores[item.cluster_id] = cluster_scores.get(item.cluster_id, 0.0) + (item.final_score or 0.0)
+        
+        # Sort by total score and return top n
+        sorted_clusters = sorted(cluster_scores.items(), key=lambda x: x[1], reverse=True)
+        return [c[0] for c in sorted_clusters[:n]]

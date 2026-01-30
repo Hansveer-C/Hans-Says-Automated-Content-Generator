@@ -3,9 +3,9 @@ import json
 from typing import List, Dict, Optional
 from openai import OpenAI
 from sqlalchemy.orm import Session
-from app.models import ContentItem, TopicCommentary
+from app.models import ContentItem, TopicCommentary, TopicPackage
 
-class CommentaryGenerator:
+class ContentEngine:
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if self.api_key:
@@ -13,11 +13,10 @@ class CommentaryGenerator:
         else:
             self.client = None
 
-    def generate_for_cluster(self, db: Session, cluster_id: str) -> Optional[TopicCommentary]:
+    def generate_commentary_angles(self, db: Session, cluster_id: str) -> Optional[TopicCommentary]:
         """
-        Generates 3 commentary angles and a Facebook-ready version for a given cluster.
+        Step 5: Angle Generation (3 angles + strongest)
         """
-        # 1. Fetch top items in this cluster
         items = db.query(ContentItem).filter(
             ContentItem.cluster_id == cluster_id
         ).order_by(ContentItem.final_score.desc()).limit(10).all()
@@ -25,43 +24,12 @@ class CommentaryGenerator:
         if not items:
             return None
 
-        # 2. Extract context
         context = "\n".join([f"- {item.title}: {item.summary}" for item in items])
         
         data = None
         if self.client:
             try:
-                prompt = f"""
-                You are a political analyst for 'HansSays', an intelligence engine focusing on Canada and India politics.
-                Analyze the following top news items for the topic '{cluster_id}':
-                
-                {context}
-                
-                Generate three distinct commentary angles:
-                1. Critical: A deep dive into the flaws or risks.
-                2. Comparative: Analyzing the situation by comparing Canada's approach vs India's (or vice-versa).
-                3. Accountability-focused: Identifying who is responsible and what they should be held to.
-                
-                Finally, identify the STRONGEST angle and rewrite it as a Facebook-ready post. 
-                Facebook Tone Requirements:
-                - Plain language (no academic jargon)
-                - Short paragraphs
-                - Emotionally engaging but "report-safe" (no hate speech or extreme bias)
-                - Strong hook
-                - Clear stance
-                
-                Return the result in JSON format:
-                {{
-                  "angles": [
-                    {{"type": "Critical", "content": "..."}},
-                    {{"type": "Comparative", "content": "..."}},
-                    {{"type": "Accountability", "content": "..."}}
-                  ],
-                  "strongest_angle_type": "...",
-                  "facebook_post": "..."
-                }}
-                """
-
+                prompt = self._get_angle_prompt(cluster_id, context)
                 response = self.client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -72,13 +40,11 @@ class CommentaryGenerator:
                 )
                 data = json.loads(response.choices[0].message.content)
             except Exception as e:
-                print(f"Error calling LLM: {e}")
+                print(f"Error calling LLM for angles: {e}")
 
-        # 3. Fallback to mock if LLM failed or wasn't available
         if not data:
-            data = self._get_mock_data(cluster_id)
+            data = self._get_mock_angle_data(cluster_id)
             
-        # 4. Save and return
         commentary = TopicCommentary(
             cluster_id=cluster_id,
             angles=data["angles"],
@@ -90,12 +56,167 @@ class CommentaryGenerator:
         db.refresh(commentary)
         return commentary
 
-    def _get_mock_data(self, cluster_id: str) -> Dict:
+    def generate_full_package(self, db: Session, cluster_id: str) -> Optional[TopicPackage]:
+        """
+        Steps 6-15: Generates the full 'Final Output Package'.
+        Multi-stage pass: Tone -> Article -> Readability -> Voice -> Safety -> Media.
+        """
+        items = db.query(ContentItem).filter(
+            ContentItem.cluster_id == cluster_id
+        ).order_by(ContentItem.final_score.desc()).limit(10).all()
+
+        if not items:
+            return None
+
+        context = "\n".join([f"- {item.title}: {item.summary}" for item in items])
+        
+        # We need the strongest angle first
+        commentary = db.query(TopicCommentary).filter(TopicCommentary.cluster_id == cluster_id).order_by(TopicCommentary.generated_at.desc()).first()
+        if not commentary:
+            commentary = self.generate_commentary_angles(db, cluster_id)
+
+        strongest_angle = commentary.strongest_angle_html # This is a placeholder for the actual text
+
+        data = None
+        if self.client:
+            try:
+                prompt = self._get_package_prompt(cluster_id, context, strongest_angle)
+                response = self.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are HANS SAYS, a blunt, Canadian, accountability-focused political analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={ "type": "json_object" }
+                )
+                data = json.loads(response.choices[0].message.content)
+            except Exception as e:
+                print(f"Error calling LLM for full package: {e}")
+
+        if not data:
+            data = self._get_mock_package_data(cluster_id)
+
+        # Step 16: Auto-Scheduling (Canada)
+        scheduling = self._calculate_scheduling(cluster_id, data)
+
+        package = TopicPackage(
+            cluster_id=cluster_id,
+            safe_article=data["safe_article"],
+            safe_headlines=data["safe_headlines"],
+            safe_cta=data["safe_cta"],
+            pinned_comment=data["pinned_comment"],
+            carousel_slides=data["carousel_slides"],
+            visual_directions=data["visual_directions"],
+            recommended_post_time=scheduling["time"],
+            scheduling_metadata={
+                "timezone": scheduling["timezone"],
+                "why_this_time_works": scheduling["why"]
+            }
+        )
+        
+        db.add(package)
+        db.commit()
+        db.refresh(package)
+        return package
+
+    def _calculate_scheduling(self, cluster_id, data):
+        """
+        Assigns recommended Facebook posting time using Canadian time zones.
+        - Breaking / controversial -> evening prime window
+        - Policy-heavy -> lunch window
+        """
+        from datetime import datetime, time, timedelta
+        
+        # Default to today
+        now = datetime.now()
+        
+        # Heuristic: if cluster is "policy" or "student visas" -> Lunch
+        is_policy = any(k in cluster_id.lower() for k in ["policy", "student", "economy", "international"])
+        
+        if is_policy:
+            # Lunch window: 12:30 PM
+            target_time = time(12, 30)
+            why = "Policy-heavy topics perform better in the lunch window when professionals are browsing."
+        else:
+            # Evening prime: 7:30 PM
+            target_time = time(19, 30)
+            why = "Controversial or breaking news gains maximum engagement in the evening prime window."
+        
+        # Schedule for today or tomorrow if time passed
+        scheduled_dt = datetime.combine(now.date(), target_time)
+        if scheduled_dt < now:
+            scheduled_dt += timedelta(days=1)
+            
+        return {
+            "time": scheduled_dt,
+            "timezone": "America/Toronto (EST/EDT)",
+            "why": why
+        }
+
+    def _get_angle_prompt(self, cluster_id, context):
+        return f"""
+        Analyze the following top news items for the topic '{cluster_id}':
+        {context}
+        
+        Generate three distinct commentary angles:
+        1. Critical: A deep dive into the flaws or risks.
+        2. Comparative: Analyzing the situation by comparing Canada's approach vs India's (or vice-versa).
+        3. Accountability-focused: Identifying who is responsible and what they should be held to.
+        
+        Finally, identify the STRONGEST angle and rewrite it as a Facebook-ready post stub. 
+        Return in JSON format: {{ "angles": [...], "facebook_post": "..." }}
+        """
+
+    def _get_package_prompt(self, cluster_id, context, strongest_angle):
+        return f"""
+        You are HANS SAYS. Your voice is blunt, Canadian, accountability-focused. Use plain spoken language, short sentences. No hashtags, no slogans.
+        
+        Topic: {cluster_id}
+        Selected Angle: {strongest_angle}
+        News Context: {context}
+        
+        Implement the following steps:
+        1. Article Generation: Write a 300-400 word article. Clear stance, conversational, strong hook.
+        2. Readability Pass: Ensure 6th-grade reading level.
+        3. Facebook Pass: Mobile format, short paragraphs, no bullet points, clean spacing.
+        4. Safety Pass: Identify risky claims and reframe them into defensible language without weakening the stance.
+        5. Headlines: 3 scroll-stopping headlines (under 12 words).
+        6. CTA: 1 engagement CTA.
+        7. Pinned Comment: 1-2 sentences inviting debate, not insults.
+        8. Visual Media: Extract 6-8 visual beats (under 2s each) and carousel slide text (max 12 words).
+        
+        Return the result in JSON:
+        {{
+          "safe_article": "...",
+          "safe_headlines": ["...", "...", "..."],
+          "safe_cta": "...",
+          "pinned_comment": "...",
+          "carousel_slides": [{{ "slide_number": 1, "text": "..." }}, ...],
+          "visual_directions": [{{ "slide_number": 1, "direction": "..." }}, ...],
+          "core_thesis": "..."
+        }}
+        """
+
+    def _get_mock_angle_data(self, cluster_id):
         return {
             "angles": [
-                {"type": "Critical", "content": f"The current handling of {cluster_id} is lacking transparency and coordination across various sectors."},
-                {"type": "Comparative", "content": f"While Canada is focusing on long-term sustainability, India's rapid development in {cluster_id} provides a stark contrast in pace."},
-                {"type": "Accountability", "content": f"Decision makers in the {cluster_id} space must be held accountable for the recent policy shifts that caught many by surprise."}
+                {"type": "Critical", "content": "Mock critical angle."},
+                {"type": "Comparative", "content": "Mock comparative angle."},
+                {"type": "Accountability", "content": "Mock accountability angle."}
             ],
-            "facebook_post": f"🚨 <b>Is {cluster_id} spinning out of control?</b><br><br>We've been seeing a lot of headlines about {cluster_id} lately, but nobody is asking the hard questions.<br><br>While other countries are moving forward, we seem to be stuck in neutral. It's time for some real accountability.<br><br>What do you think? 👇"
+            "facebook_post": "Mock Facebook stub."
         }
+
+    def _get_mock_package_data(self, cluster_id):
+        return {
+            "safe_article": f"This is a mock HANS SAYS article about {cluster_id}. It's blunt and Canadian.",
+            "safe_headlines": ["Headline 1", "Headline 2", "Headline 3"],
+            "safe_cta": "What do you think? Let us know below.",
+            "pinned_comment": "Keep it civil, but tell us the truth.",
+            "carousel_slides": [{"slide_number": 1, "text": "Slide 1 text"}],
+            "visual_directions": [{"slide_number": 1, "direction": "Abstract symbolic visual"}],
+            "scheduling_metadata": {"timezone": "America/Toronto", "why": "Evening prime window"}
+        }
+
+# For backward compatibility during migration
+CommentaryGenerator = ContentEngine

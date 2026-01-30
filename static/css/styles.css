@@ -603,3 +603,96 @@ nav {
     background: rgba(59, 130, 246, 0.1);
     border-left: 4px solid var(--clr-primary-500);
 }
+
+/* Tabs */
+.panel-tabs {
+    display: flex;
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-6);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: var(--sp-2) 0;
+    cursor: pointer;
+    font-weight: var(--fw-semibold);
+    border-bottom: 2px solid transparent;
+    transition: var(--tr-fast);
+}
+
+.tab-btn.active {
+    color: var(--clr-primary-500);
+    border-bottom-color: var(--clr-primary-500);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Package Display */
+.package-display {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-8);
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: var(--sp-2);
+}
+
+.view-section {
+    padding: var(--sp-4);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.section-label {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--clr-primary-400);
+    text-transform: uppercase;
+    margin-bottom: var(--sp-4);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.headline-item {
+    padding: var(--sp-2) var(--sp-4);
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--sp-2);
+    font-weight: var(--fw-semibold);
+}
+
+.cta-box {
+    border: 1px dashed var(--clr-primary-500);
+    padding: var(--sp-4);
+    border-radius: var(--radius-md);
+    color: var(--clr-primary-300);
+}
+
+.beats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--sp-4);
+}
+
+.beat-card {
+    padding: var(--sp-3);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-xs);
+}
+
+.beat-number {
+    color: var(--clr-primary-500);
+    font-weight: var(--fw-bold);
+    margin-bottom: var(--sp-1);
+}

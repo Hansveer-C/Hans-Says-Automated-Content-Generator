@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import init_db, get_db, SessionLocal
 from app.models import Source, ContentItem, SourceType, TopicCommentary
 from app.scheduler import start_scheduler
-from app.analysis.commentary import CommentaryGenerator
+from app.analysis.commentary import ContentEngine
 import uvicorn
 import os
 
@@ -106,11 +106,30 @@ def get_trending_topics(db: Session = Depends(get_db)):
 
 @app.post("/topics/{cluster_id}/generate_angles")
 def generate_topic_angles(cluster_id: str, db: Session = Depends(get_db)):
-    generator = CommentaryGenerator()
-    commentary = generator.generate_for_cluster(db, cluster_id)
+    engine = ContentEngine()
+    commentary = engine.generate_commentary_angles(db, cluster_id)
     if not commentary:
         return {"error": "No items found for this topic"}
     return commentary
+
+@app.post("/topics/{cluster_id}/generate_full_package")
+def generate_full_package(cluster_id: str, db: Session = Depends(get_db)):
+    engine = ContentEngine()
+    package = engine.generate_full_package(db, cluster_id)
+    if not package:
+        return {"error": "No items found or failed to generate package"}
+    return package
+
+@app.get("/topics/{cluster_id}/package")
+def get_topic_package(cluster_id: str, db: Session = Depends(get_db)):
+    from app.models import TopicPackage
+    package = db.query(TopicPackage).filter(
+        TopicPackage.cluster_id == cluster_id
+    ).order_by(TopicPackage.date.desc()).first()
+    
+    if not package:
+        return {"error": "No package found for this topic"}
+    return package
 
 @app.get("/topics/{cluster_id}/angles")
 def get_topic_angles(cluster_id: str, db: Session = Depends(get_db)):
