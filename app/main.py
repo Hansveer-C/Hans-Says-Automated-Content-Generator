@@ -57,6 +57,7 @@ def get_items(
     q: str = None, 
     country: str = None, 
     source_type: str = None, # 'news', 'reddit', or None for all
+    sort_by: str = "timestamp", # 'timestamp', 'final_score', or 'controversy_score'
     limit: int = 20,
     db: Session = Depends(get_db)
 ):
@@ -75,8 +76,15 @@ def get_items(
         search = f"%{q}%"
         query = query.filter((ContentItem.title.ilike(search)) | (ContentItem.summary.ilike(search)))
     
-    # Combined feed sorted by the unified 'timestamp' field
-    items = query.order_by(ContentItem.timestamp.desc()).limit(limit).all()
+    # Sorting
+    if sort_by == "final_score":
+        query = query.order_by(ContentItem.final_score.desc())
+    elif sort_by == "controversy_score":
+        query = query.order_by(ContentItem.controversy_score.desc())
+    else:
+        query = query.order_by(ContentItem.timestamp.desc())
+        
+    items = query.limit(limit).all()
     return items
 
 @app.get("/trending")
