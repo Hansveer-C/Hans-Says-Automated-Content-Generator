@@ -152,11 +152,16 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        const btnPromoteIcon = div.querySelector('.btn-promote-studio-icon');
-        btnPromoteIcon.onclick = async (e) => {
-            e.stopPropagation();
-            btnPromoteIcon.disabled = true;
-            btnPromoteIcon.innerHTML = '<i class="loading-spinner"></i>';
+        const promoteItem = async (e) => {
+            if (e) e.stopPropagation();
+
+            // Visual feedback
+            div.style.opacity = '0.5';
+            div.style.pointerEvents = 'none';
+
+            const btnIcon = div.querySelector('.btn-promote-studio-icon');
+            if (btnIcon) btnIcon.innerHTML = '<i class="loading-spinner"></i>';
+
             try {
                 const res = await fetch(`/items/${item.id}/promote`, { method: 'POST' });
                 const data = await res.json();
@@ -166,16 +171,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (e) {
                 console.error('Promotion failed:', e);
-                btnPromoteIcon.disabled = false;
-                btnPromoteIcon.innerHTML = '<i data-lucide="zap"></i>';
+                div.style.opacity = '1';
+                div.style.pointerEvents = 'all';
+                if (btnIcon) btnIcon.innerHTML = '<i data-lucide="zap"></i>';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         };
 
+        const btnPromoteIcon = div.querySelector('.btn-promote-studio-icon');
+        if (btnPromoteIcon) {
+            btnPromoteIcon.onclick = promoteItem;
+        }
+
         div.onclick = (e) => {
-            if (e.target.closest('.btn-promote-studio-icon')) return;
-            e.preventDefault();
+            if (e.target.closest('.btn-promote-studio-icon') || e.target.closest('.btn-icon-sm')) return;
+            promoteItem(e);
+        };
+
+        div.title = "Click to promote this topic to the Studio";
+
+        const metricsContainer = div.querySelector('.card-metrics');
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn-icon-sm';
+        viewBtn.innerHTML = '<i data-lucide="eye"></i>';
+        viewBtn.title = 'View Details';
+        viewBtn.onclick = (e) => {
+            e.stopPropagation();
             openReadingPane(item);
         };
+        metricsContainer.appendChild(viewBtn);
 
         return div;
     }
