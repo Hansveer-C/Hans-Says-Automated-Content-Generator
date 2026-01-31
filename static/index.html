@@ -33,9 +33,14 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <div class="status-indicator">
+                <button class="btn-primary composer-trigger" id="btn-open-composer">
+                    <i data-lucide="plus"></i>
+                    <span>Create</span>
+                </button>
+                <div class="status-indicator surface"
+                    style="padding: 4px 8px; border-radius: 4px; font-size: 10px; color: white;">
                     <span class="dot pulse"></span>
-                    <span>Live Engine</span>
+                    <span>Live</span>
                 </div>
             </div>
         </aside>
@@ -61,17 +66,22 @@
     <!-- Templates -->
     <template id="dashboard-template">
         <div class="view-header">
-            <h1>Feed Dashboard</h1>
+            <div class="header-main">
+                <h1>Streams</h1>
+                <button class="btn-secondary" id="btn-add-stream">
+                    <i data-lucide="plus"></i>
+                    <span>Add Stream</span>
+                </button>
+            </div>
             <div class="filter-pills" id="filter-pills">
-                <button class="pill active" data-filter="all">All</button>
+                <button class="pill active" data-filter="all">All Channels</button>
                 <button class="pill" data-filter="immigration">Immigration</button>
                 <button class="pill" data-filter="elections">Elections</button>
                 <button class="pill" data-filter="economy">Economy</button>
-                <button class="pill" data-filter="policy">Policy</button>
             </div>
         </div>
-        <div class="feed-grid" id="feed-grid">
-            <!-- Cards injected here -->
+        <div class="streams-container" id="feed-grid">
+            <!-- Columns (Streams) injected here -->
             <div class="loading-shimmer"></div>
         </div>
     </template>
@@ -134,7 +144,7 @@
                 <span class="stat-label">Active Sources</span>
                 <span class="stat-value">12</span>
             </div>
-            <div class="source-list glass">
+            <div class="source-list surface">
                 <h3>Source Management</h3>
                 <ul id="source-list-ui"></ul>
             </div>
@@ -142,7 +152,7 @@
     </template>
 
     <!-- Reading Pane -->
-    <div id="reading-pane" class="reading-pane glass">
+    <div id="reading-pane" class="reading-pane surface">
         <button class="close-pane" id="close-reading-pane">
             <i data-lucide="x"></i>
         </button>

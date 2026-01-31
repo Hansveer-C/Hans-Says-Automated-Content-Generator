@@ -40,41 +40,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Dashboard Logic
     async function renderDashboard(filter = 'all', query = '') {
-        const feedGrid = document.getElementById('feed-grid');
+        const streamsContainer = document.getElementById('feed-grid');
         const filterPills = document.getElementById('filter-pills');
-        feedGrid.innerHTML = '<div class="loading-shimmer"></div>'.repeat(6);
+        streamsContainer.innerHTML = '<div class="loading-shimmer" style="width: 350px;"></div>'.repeat(3);
 
         try {
-            // Fetch and render dynamic topic filters
+            // Fetch and render dynamic topic filters (Channels in HootSuite parlance)
             const trendingRes = await fetch('/trending');
             const trends = await trendingRes.json();
 
-            filterPills.innerHTML = `<button class="pill ${filter === 'all' ? 'active' : ''}" data-filter="all">All</button>`;
+            filterPills.innerHTML = `<button class="pill ${filter === 'all' ? 'active' : ''}" data-filter="all">All Channels</button>`;
             Object.entries(trends).forEach(([name, count]) => {
                 filterPills.innerHTML += `<button class="pill ${filter === name ? 'active' : ''}" data-filter="${name}">${name} <small>(${count})</small></button>`;
             });
 
-            let url = `/items?limit=24`;
-            if (filter !== 'all') url += `&q=${filter}`;
-            if (query) url += `&q=${query}`;
+            const streamCategories = filter === 'all' ? Object.keys(trends).slice(0, 3) : [filter];
+            streamsContainer.innerHTML = '';
 
-            const response = await fetch(url);
-            const items = await response.json();
+            for (const cat of streamCategories) {
+                const streamColumn = document.createElement('div');
+                streamColumn.className = 'stream-column';
+                streamColumn.innerHTML = `
+                    <div class="stream-header">
+                        <div class="stream-title">
+                            <i data-lucide="hash"></i>
+                            <span>${cat.charAt(0).toUpperCase() + cat.slice(1)} Feed</span>
+                        </div>
+                        <i data-lucide="more-vertical" style="cursor: pointer;"></i>
+                    </div>
+                    <div class="stream-content" id="stream-${cat}">
+                        <div class="loading-shimmer"></div>
+                    </div>
+                `;
+                streamsContainer.appendChild(streamColumn);
 
-            feedGrid.innerHTML = '';
-            items.forEach(item => {
-                const card = createCard(item);
-                feedGrid.appendChild(card);
-            });
+                // Fetch items for this stream
+                let url = `/items?limit=15&q=${cat}`;
+                if (query) url += `&q=${query}`;
+
+                fetch(url).then(res => res.json()).then(items => {
+                    const contentDiv = document.getElementById(`stream-${cat}`);
+                    contentDiv.innerHTML = '';
+                    items.forEach(item => {
+                        contentDiv.appendChild(createCard(item));
+                    });
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                });
+            }
         } catch (error) {
             console.error('Error fetching items/trends:', error);
-            feedGrid.innerHTML = '<p class="error">Failed to load content. Please try again.</p>';
+            streamsContainer.innerHTML = '<p class="error">Failed to load streams. Please try again.</p>';
         }
+    }
+
+    // Composer Logic
+    const composerModal = document.getElementById('composer-modal');
+    const btnOpenComposer = document.getElementById('btn-open-composer');
+    const btnCloseComposer = document.getElementById('close-composer');
+    const composerText = document.getElementById('composer-text');
+    const previewText = document.getElementById('preview-text-content');
+
+    if (btnOpenComposer) {
+        btnOpenComposer.onclick = () => composerModal.classList.add('active');
+    }
+
+    if (btnCloseComposer) {
+        btnCloseComposer.onclick = () => composerModal.classList.remove('active');
+    }
+
+    if (composerText) {
+        composerText.oninput = (e) => {
+            previewText.textContent = e.target.value || "Your post content will appear here...";
+        };
     }
 
     function createCard(item) {
         const div = document.createElement('div');
-        div.className = 'content-card glass';
+        div.className = 'content-card';
         div.style.cursor = 'pointer';
 
         const typeClass = item.source_type === 'news' ? 'tag-news' : 'tag-reddit';
