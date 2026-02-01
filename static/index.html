@@ -169,6 +169,53 @@
         </div>
     </div>
 
+    <!-- Composer Modal -->
+    <div id="composer-modal" class="composer-modal">
+        <div class="composer-container glass">
+            <header class="composer-header">
+                <h3>Draft your thought...</h3>
+                <button id="close-composer" class="close-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+            <div class="composer-body">
+                <main class="composer-editor">
+                    <div class="account-selector">
+                        <span class="selector-label">POSTING TO:</span>
+                        <div class="account-pill active">
+                            <i data-lucide="twitter"></i>
+                            <span>HansSays_Intel</span>
+                        </div>
+                    </div>
+                    <textarea id="composer-text" placeholder="What's the intelligence report today?"></textarea>
+                    <div class="media-dropzone surface">
+                        <i data-lucide="image"></i>
+                        <span>Add Media (Drag & Drop)</span>
+                    </div>
+                </main>
+                <aside class="composer-preview">
+                    <div class="preview-header">Live Preview</div>
+                    <div class="dynamic-preview surface">
+                        <div class="preview-user">
+                            <div class="preview-avatar">H</div>
+                            <div class="user-info">
+                                <span class="preview-name">HansSays Intel</span>
+                                <span class="preview-handle">@HansSays_Intel • Just now</span>
+                            </div>
+                        </div>
+                        <div id="preview-text-content" class="preview-content">Your post content will appear here...
+                        </div>
+                    </div>
+                </aside>
+            </div>
+            <footer class="composer-footer">
+                <button class="btn-secondary"
+                    onclick="document.getElementById('composer-modal').classList.remove('active')">Cancel</button>
+                <button class="btn-primary">Send Now</button>
+            </footer>
+        </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
     <script>
         lucide.createIcons();
