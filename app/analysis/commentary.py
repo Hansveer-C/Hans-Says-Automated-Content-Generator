@@ -105,16 +105,26 @@ class ContentEngine:
             safe_headlines=data["safe_headlines"],
             safe_cta=data["safe_cta"],
             pinned_comment=data["pinned_comment"],
+            x_thread=data.get("x_thread"),
+            shorts_script=data.get("shorts_script"),
+            reels_script=data.get("reels_script"),
+            seeding_pack=data.get("seeding_pack"),
             carousel_slides=data["carousel_slides"],
             visual_directions=data["visual_directions"],
             recommended_post_time=scheduling["time"],
             scheduling_metadata={
                 "timezone": scheduling["timezone"],
-                "why_this_time_works": scheduling["why"]
+                "why_this_time_works": scheduling["why"],
+                "staggered_offsets": scheduling["staggered_offsets"]
             }
         )
         
         db.add(package)
+        
+        # Mark all items in this cluster as used_for_content=True
+        for item in items:
+            item.used_for_content = True
+            
         db.commit()
         db.refresh(package)
         return package
@@ -124,6 +134,9 @@ class ContentEngine:
         Assigns recommended Facebook posting time using Canadian time zones.
         - Breaking / controversial -> evening prime window
         - Policy-heavy -> lunch window
+        
+        Includes staggered offsets for other platforms:
+        X (Immediate) -> FB (Offset) -> IG (Offset) -> YT (Offset)
         """
         from datetime import datetime, time, timedelta
         
@@ -150,7 +163,13 @@ class ContentEngine:
         return {
             "time": scheduled_dt,
             "timezone": "America/Toronto (EST/EDT)",
-            "why": why
+            "why": why,
+            "staggered_offsets": {
+                "X": 0,          # X is usually first for breaking news
+                "Facebook": 30,  # +30 mins
+                "Instagram": 60, # +1 hour
+                "YouTube": 120   # +2 hours
+            }
         }
 
     def _get_angle_prompt(self, cluster_id, context):
@@ -184,6 +203,10 @@ class ContentEngine:
         6. CTA: 1 engagement CTA.
         7. Pinned Comment: 1-2 sentences inviting debate, not insults.
         8. Visual Media: Extract 6-8 visual beats (under 2s each) and carousel slide text (max 12 words).
+        9. X Thread: Generate a 3-4 post thread based on the article. No hashtags.
+        10. YouTube Shorts: Write a 30s high-energy script with timestamps and a pinned comment.
+        11. Instagram Reels: Write a fast-paced script, catchy caption, and 5 hashtags at the end.
+        12. Seeding Pack: 3 recommended seed comments for each platform.
         
         Return the result in JSON:
         {{
@@ -191,6 +214,10 @@ class ContentEngine:
           "safe_headlines": ["...", "...", "..."],
           "safe_cta": "...",
           "pinned_comment": "...",
+          "x_thread": ["Post 1 text", "Post 2 text", "..."],
+          "shorts_script": "0:00 - [Hook]...\n0:05 - ...",
+          "reels_script": "Visual: ... Audio: ... Caption: ...",
+          "seeding_pack": {{ "X": ["..."], "YT": ["..."], "IG": ["..."] }},
           "carousel_slides": [{{ "slide_number": 1, "text": "..." }}, ...],
           "visual_directions": [{{ "slide_number": 1, "direction": "..." }}, ...],
           "core_thesis": "..."

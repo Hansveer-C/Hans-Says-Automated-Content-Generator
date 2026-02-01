@@ -3,16 +3,21 @@ import requests
 from sqlalchemy.orm import Session
 from app.models import ContentItem, Source, SourceType
 from app.analysis.controversy import ControversyAnalyzer
-from datetime import datetime
+from app.analysis.filters import FilterService
+from datetime import datetime, timedelta
 import time
 import json
 
 def fetch_rss_feeds(db: Session):
     sources = db.query(Source).filter(Source.type == SourceType.NEWS, Source.is_active == 1).all()
+    filter_service = FilterService()
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (HansSays News Bot; v1.0.0)'
     }
+    
+    # Get recent items for similarity check
+    recent_items = db.query(ContentItem).filter(ContentItem.timestamp >= datetime.now() - timedelta(hours=24)).all()
     
     for source in sources:
         print(f"Fetching RSS: {source.name}")
@@ -22,9 +27,25 @@ def fetch_rss_feeds(db: Session):
             feed = feedparser.parse(response.text)
             
             for entry in feed.entries:
-                # Deduplication
+                title = entry.get('title', 'No Title')
+                summary = entry.get('summary', entry.get('description', ''))
+                
+                # 1. Eligibility Check
+                if not filter_service.is_eligible(title, summary, source.name):
+                    continue
+
+                # 2. Hard Deduplication (URL)
                 existing_item = db.query(ContentItem).filter(ContentItem.external_id == entry.link).first()
                 if existing_item:
+                    continue
+                
+                # 3. Advanced Deduplication (Similarity)
+                is_duplicate = False
+                for recent in recent_items:
+                    if filter_service.jaccard_similarity(title, recent.title) > 0.7:
+                        is_duplicate = True
+                        break
+                if is_duplicate:
                     continue
                 
                 pub_date = None

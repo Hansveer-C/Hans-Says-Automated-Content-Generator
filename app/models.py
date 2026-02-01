@@ -72,6 +72,13 @@ class TopicPackage(Base):
     safe_headlines = Column(JSON) # List of 3 headlines
     safe_cta = Column(String)
     pinned_comment = Column(Text)
+    
+    # Platform Expansion
+    x_thread = Column(JSON) # List of post strings
+    shorts_script = Column(Text)
+    reels_script = Column(Text)
+    seeding_pack = Column(JSON) # { platform: [comments] }
+    
     carousel_slides = Column(JSON) # List of slide objects
     visual_directions = Column(JSON) # List of direction objects
     recommended_post_time = Column(DateTime)

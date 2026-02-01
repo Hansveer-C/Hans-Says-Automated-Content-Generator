@@ -520,25 +520,70 @@ document.addEventListener('DOMContentLoaded', () => {
         const slidesHtml = data.carousel_slides.map(s => `<div class="beat-card"><div class="beat-number">Slide ${s.slide_number}</div>${s.text}</div>`).join('');
         const directionsHtml = data.visual_directions.map(d => `<div class="beat-card"><div class="beat-number">Visual ${d.slide_number}</div>${d.direction}</div>`).join('');
 
+        // X Thread
+        const xThreadHtml = data.x_thread ? data.x_thread.map((p, i) => `
+            <div class="x-post-preview" style="padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 8px; background: rgba(0,0,0,0.2);">
+                <div style="font-size: 0.7em; color: #1da1f2; margin-bottom: 4px; font-weight: bold;">[Post ${i + 1}]</div>
+                ${p}
+            </div>
+        `).join('') : '<p class="placeholder-text">No X thread generated.</p>';
+
+        // Seeding Pack
+        const seedingHtml = data.seeding_pack ? Object.entries(data.seeding_pack).map(([platform, comments]) => `
+            <div style="margin-bottom: 10px;">
+                <div style="font-size: 0.8em; font-weight: bold; color: var(--clr-primary-400);">${platform} Seeds:</div>
+                <ul style="padding-left: 20px; font-size: 0.85em; opacity: 0.8;">
+                    ${comments.map(c => `<li>${c}</li>`).join('')}
+                </ul>
+            </div>
+        `).join('') : '';
+
         display.innerHTML = `
-            <div class="view-section">
-                <div class="section-label"><i data-lucide="megaphone"></i> Scroll-Stopping Headlines</div>
-                ${headlinesHtml}
-            </div>
-            <div class="view-section">
-                <div class="section-label"><i data-lucide="file-text"></i> Safe Article (Revised)</div>
-                <div class="article-body">${data.safe_article.replace(/\n/g, '<br>')}</div>
-            </div>
-            <div class="view-section">
-                <div class="section-label"><i data-lucide="message-square"></i> Engagement CTA & Pinned Comment</div>
-                <div class="cta-box">${data.safe_cta}</div>
-                <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;"><b>Pinned:</b> ${data.pinned_comment}</p>
-            </div>
-            <div class="view-section">
-                <div class="section-label"><i data-lucide="layout"></i> Carousel Assets (Visual Media)</div>
-                <div class="beats-grid">${slidesHtml}</div>
-                <div class="beats-grid" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-                    ${directionsHtml}
+            <div class="studio-content-stack" style="display: flex; flex-direction: column; gap: 24px;">
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="megaphone"></i> Scroll-Stopping Headlines</div>
+                    ${headlinesHtml}
+                </div>
+                
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="twitter"></i> X Thread (Repurposed)</div>
+                    ${xThreadHtml}
+                </div>
+
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="video"></i> YouTube Shorts & Reels Scripts</div>
+                    <div class="scripts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="script-box glass" style="padding: 12px;">
+                            <div style="color: #ff0000; font-weight: bold; font-size: 0.8em; margin-bottom: 8px;"><i data-lucide="youtube"></i> YT Shorts</div>
+                            <pre style="font-size: 0.85em; white-space: pre-wrap; font-family: inherit;">${data.shorts_script || 'Not generated'}</pre>
+                        </div>
+                        <div class="script-box glass" style="padding: 12px;">
+                            <div style="color: #e4405f; font-weight: bold; font-size: 0.8em; margin-bottom: 8px;"><i data-lucide="instagram"></i> IG Reels</div>
+                            <pre style="font-size: 0.85em; white-space: pre-wrap; font-family: inherit;">${data.reels_script || 'Not generated'}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="file-text"></i> Safe Article (Revised)</div>
+                    <div class="article-body">${data.safe_article.replace(/\n/g, '<br>')}</div>
+                </div>
+
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="message-square"></i> Seeding & engagement CTA</div>
+                    <div class="cta-box" style="margin-bottom: 12px;">${data.safe_cta}</div>
+                    <div class="seeding-pack-display glass" style="padding: 12px;">
+                        ${seedingHtml}
+                        <p style="margin-top: 10px; font-size: 0.9em; opacity: 1; color: var(--clr-primary-300);"><b>Pinned Comment:</b> ${data.pinned_comment}</p>
+                    </div>
+                </div>
+
+                <div class="view-section">
+                    <div class="section-label"><i data-lucide="layout"></i> Carousel Assets (Visual Media)</div>
+                    <div class="beats-grid">${slidesHtml}</div>
+                    <div class="beats-grid" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
+                        ${directionsHtml}
+                    </div>
                 </div>
             </div>
         `;
@@ -546,13 +591,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function renderAdmin() {
-        document.getElementById('stat-total-items').textContent = '470+';
-        const sourceListUi = document.getElementById('source-list-ui');
-        sourceListUi.innerHTML = `
-            <li>CBC News - Politics <span class="badge active">Active</span></li>
-            <li>The Hindu - National <span class="badge active">Active</span></li>
-            <li>r/CanadaPolitics <span class="badge active">Active</span></li>
-        `;
+        try {
+            const itemsRes = await fetch('/items?limit=1');
+            const totalItems = itemsRes.headers.get('X-Total-Count') || '930+'; // Simple fallback or mock
+            document.getElementById('stat-total-items').textContent = totalItems;
+
+            const sourcesRes = await fetch('/sources');
+            const sources = await sourcesRes.json();
+            const sourceListUi = document.getElementById('source-list-ui');
+
+            sourceListUi.innerHTML = sources.map(s => `
+                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span>${s.name} <small style="opacity: 0.5;">(${s.country})</small></span>
+                    <span class="badge ${s.is_active ? 'active' : ''}">${s.is_active ? 'Active' : 'Inactive'}</span>
+                </li>
+            `).join('');
+        } catch (e) {
+            console.error('Admin render failed:', e);
+        }
     }
 
     navItems.forEach(item => {

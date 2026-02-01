@@ -58,12 +58,16 @@ def read_root():
 def get_items(
     q: str = None, 
     country: str = None, 
-    source_type: str = None, # 'news', 'reddit', or None for all
-    sort_by: str = "timestamp", # 'timestamp', 'final_score', or 'controversy_score'
+    source_type: str = None, 
+    used: bool = None,
+    sort_by: str = "timestamp", 
     limit: int = 20,
     db: Session = Depends(get_db)
 ):
     query = db.query(ContentItem)
+    
+    if used is not None:
+        query = query.filter(ContentItem.used_for_content == used)
     
     if country:
         query = query.filter(ContentItem.country == country)
@@ -160,6 +164,10 @@ def get_topic_angles(cluster_id: str, db: Session = Depends(get_db)):
     if not commentary:
         return {"error": "No commentary found for this topic"}
     return commentary
+
+@app.get("/sources")
+def get_sources(db: Session = Depends(get_db)):
+    return db.query(Source).all()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

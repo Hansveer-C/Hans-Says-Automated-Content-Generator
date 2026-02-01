@@ -27,8 +27,15 @@ def fetch_reddit_content(db: Session):
     headers = {
         'User-Agent': 'HansSays:v1.0.0 (News Aggregator Bot)'
     }
+    
+    from app.analysis.filters import FilterService
+    from datetime import timedelta
+    filter_service = FilterService()
 
     sources = db.query(Source).filter(Source.type == SourceType.REDDIT, Source.is_active == 1).all()
+
+    # Get recent items for similarity check
+    recent_items = db.query(ContentItem).filter(ContentItem.timestamp >= datetime.now() - timedelta(hours=24)).all()
 
     for source in sources:
         print(f"Fetching Reddit (Non-API): r/{source.url}")
@@ -43,6 +50,18 @@ def fetch_reddit_content(db: Session):
             for post in posts:
                 item = post.get('data', {})
                 if not should_ingest_reddit(item, GET_ALL_KEYWORDS):
+                    continue
+                
+                title = item.get('title')
+                summary = item.get('selftext') if item.get('is_self') else item.get('url')
+
+                # 1. Similarity Check
+                is_duplicate = False
+                for recent in recent_items:
+                    if filter_service.jaccard_similarity(title, recent.title) > 0.7:
+                        is_duplicate = True
+                        break
+                if is_duplicate:
                     continue
                     
                 external_id = item.get('id')
