@@ -236,10 +236,26 @@ class ContentEngine:
 
     def _get_mock_package_data(self, cluster_id):
         return {
-            "safe_article": f"This is a mock HANS SAYS article about {cluster_id}. It's blunt and Canadian.",
-            "safe_headlines": ["Headline 1", "Headline 2", "Headline 3"],
-            "safe_cta": "What do you think? Let us know below.",
-            "pinned_comment": "Keep it civil, but tell us the truth.",
+            "safe_article": f"This is a mock HANS SAYS article about {cluster_id}. It's blunt and Canadian. We need to stop the nonsense and get to work. Accountability is key.",
+            "safe_headlines": [
+                f"The {cluster_id} Crisis: Where is the accountability?",
+                f"Hans Says: Stop Ignoring the {cluster_id} Problem",
+                f"Why Canada is failing on {cluster_id}"
+            ],
+            "safe_cta": "Do you agree? Comments below.",
+            "pinned_comment": "Keep the debate focused on facts.",
+            "x_thread": [
+                f"1/ The situation with {cluster_id} has reached a breaking point. No more hyphens, no more excuses.",
+                "2/ We've looked at the data. The current strategy is failing Canadian families.",
+                "3/ It's time for leadership to step up or step aside. #HansSays"
+            ],
+            "shorts_script": "0:00 - [Hook] You think you know what's happening with immigration?\n0:05 - Think again. We're capping the nonsense today.",
+            "reels_script": "Visual: Fast cuts of Ottawa. Audio: Hans voice. Caption: No more excuses.",
+            "seeding_pack": {
+                "X": ["Spot on Hans.", "Someone had to say it."],
+                "YT": ["Great breakdown.", "Finally some truth."],
+                "IG": ["Hard truths.", "Need more of this."]
+            },
             "carousel_slides": [{"slide_number": 1, "text": "Slide 1 text"}],
             "visual_directions": [{"slide_number": 1, "direction": "Abstract symbolic visual"}],
             "scheduling_metadata": {"timezone": "America/Toronto", "why": "Evening prime window"}
