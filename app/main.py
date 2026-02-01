@@ -89,6 +89,13 @@ def get_items(
     items = query.limit(limit).all()
     return items
 
+@app.get("/items/{item_id}")
+def get_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
+    if not item:
+        return {"error": "Item not found"}
+    return item
+
 @app.post("/items/{item_id}/promote")
 def promote_item(item_id: int, db: Session = Depends(get_db)):
     item = db.query(ContentItem).filter(ContentItem.id == item_id).first()

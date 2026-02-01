@@ -2,6 +2,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewContainer = document.getElementById('view-container');
     const navItems = document.querySelectorAll('.nav-item');
     const globalSearch = document.getElementById('global-search');
+    const sidebar = document.getElementById('sidebar');
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+
+    // Sidebar Toggle & Persistence
+    if (sidebar && btnToggleSidebar) {
+        // Init from storage
+        const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+
+        btnToggleSidebar.onclick = () => {
+            const nowCollapsed = sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebar-collapsed', nowCollapsed);
+        };
+    }
 
     // Routing Logic
     const routes = {
@@ -33,6 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 console.error(`Error in route ${view}:`, e);
             }
+        }
+
+        // Global event listener for Add Stream button (if it exists in the view)
+        const btnAddStream = document.getElementById('btn-add-stream');
+        if (btnAddStream) {
+            btnAddStream.onclick = () => handleAddStream();
         }
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -114,6 +134,54 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    async function handleAddStream() {
+        const topic = prompt("Enter a topic or keyword to add as a new stream (e.g., 'Economy', 'Technology', 'Healthcare'):");
+        if (!topic) return;
+
+        const streamsContainer = document.getElementById('feed-grid');
+        const cat = topic.toLowerCase().trim();
+
+        // Check if stream already exists
+        if (document.getElementById(`stream-${cat}`)) {
+            alert("This stream is already active!");
+            return;
+        }
+
+        const streamColumn = document.createElement('div');
+        streamColumn.className = 'stream-column';
+        streamColumn.innerHTML = `
+            <div class="stream-header">
+                <div class="stream-title">
+                    <i data-lucide="hash"></i>
+                    <span>${topic} Feed</span>
+                </div>
+                <i data-lucide="more-vertical" style="cursor: pointer;"></i>
+            </div>
+            <div class="stream-content" id="stream-${cat}">
+                <div class="loading-shimmer"></div>
+            </div>
+        `;
+        streamsContainer.appendChild(streamColumn);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        // Fetch items for the new stream
+        fetch(`/items?limit=15&q=${cat}`).then(res => res.json()).then(items => {
+            const contentDiv = document.getElementById(`stream-${cat}`);
+            contentDiv.innerHTML = '';
+            if (items.length === 0) {
+                contentDiv.innerHTML = '<p class="placeholder-text" style="margin-top: 20px;">No recent items found for this topic.</p>';
+            } else {
+                items.forEach(item => {
+                    contentDiv.appendChild(createCard(item));
+                });
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }).catch(err => {
+            console.error(`Error fetching items for ${cat}:`, err);
+            document.getElementById(`stream-${cat}`).innerHTML = '<p class="error">Failed to load items.</p>';
+        });
+    }
+
     function createCard(item) {
         const div = document.createElement('div');
         div.className = 'content-card';
@@ -152,6 +220,18 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
+        // Ensure Eye icon is ALWAYS present in a consistent container
+        const metricsContainer = div.querySelector('.card-metrics');
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn-icon-sm';
+        viewBtn.innerHTML = '<i data-lucide="eye"></i>';
+        viewBtn.title = 'View Details';
+        viewBtn.onclick = (e) => {
+            e.stopPropagation();
+            openReadingPane(item);
+        };
+        metricsContainer.appendChild(viewBtn);
+
         const promoteItem = async (e) => {
             if (e) e.stopPropagation();
 
@@ -167,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 if (data.cluster_id) {
                     window.preSelectedCluster = data.cluster_id;
+                    window.preSelectedItem = item.id;
                     navigate('studio');
                 }
             } catch (e) {
@@ -190,23 +271,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         div.title = "Click to promote this topic to the Studio";
 
-        const metricsContainer = div.querySelector('.card-metrics');
-        const viewBtn = document.createElement('button');
-        viewBtn.className = 'btn-icon-sm';
-        viewBtn.innerHTML = '<i data-lucide="eye"></i>';
-        viewBtn.title = 'View Details';
-        viewBtn.onclick = (e) => {
-            e.stopPropagation();
-            openReadingPane(item);
-        };
-        metricsContainer.appendChild(viewBtn);
 
         return div;
     }
 
+    let currentReadingItem = null;
+
     function openReadingPane(item) {
         const pane = document.getElementById('reading-pane');
         const content = document.getElementById('reading-pane-content');
+
+        // Toggle behavior: if clicking the SAME item, close it
+        if (currentReadingItem === item.id && pane.classList.contains('active')) {
+            closeReadingPane();
+            return;
+        }
+        currentReadingItem = item.id;
 
         const typeLabel = item.source_type === 'news' ? 'News' : 'Reddit';
 
@@ -242,6 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const data = await res.json();
                     if (data.cluster_id) {
                         window.preSelectedCluster = data.cluster_id;
+                        window.preSelectedItem = item.id;
                         closeReadingPane();
                         navigate('studio');
                     }
@@ -273,10 +354,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function renderStudio() {
         console.log('Rendering Studio...');
-        const btnGenerateCommentary = document.getElementById('btn-generate-commentary');
-        const btnGeneratePackage = document.getElementById('btn-generate-package');
-        const banner = document.getElementById('active-topic-banner');
-        const topicNameDisplay = document.getElementById('active-topic-name');
+        const btnGenerateCommentary = viewContainer.querySelector('#btn-generate-commentary');
+        const btnGeneratePackage = viewContainer.querySelector('#btn-generate-package');
+        const banner = viewContainer.querySelector('#active-topic-banner');
+        const topicNameDisplay = viewContainer.querySelector('#active-topic-name');
+        const referenceContainer = viewContainer.querySelector('#reference-article-source');
+        const referenceContent = viewContainer.querySelector('#reference-article-content');
+
+        if (!btnGenerateCommentary || !btnGeneratePackage || !banner) {
+            console.warn('Major Studio elements missing from active view. Skipping render logic.');
+            return;
+        }
 
         // Handle pre-selection or existing selection
         if (window.preSelectedCluster) {
@@ -288,23 +376,47 @@ document.addEventListener('DOMContentLoaded', () => {
             btnGenerateCommentary.disabled = false;
             btnGeneratePackage.disabled = false;
             banner.style.display = 'flex';
-            topicNameDisplay.textContent = selectedCluster;
+            topicNameDisplay.textContent = selectedCluster.toUpperCase();
 
-            // Auto-fetch if selected
+            // Handle specific item reference
+            if (window.preSelectedItem && referenceContainer && referenceContent) {
+                referenceContainer.style.display = 'block';
+                referenceContent.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>';
+                fetch(`/items/${window.preSelectedItem}`).then(res => res.json()).then(item => {
+                    if (item.error) {
+                        referenceContent.innerHTML = '<p class="error">Reference article not found.</p>';
+                        return;
+                    }
+                    referenceContent.innerHTML = `
+                        <h3 style="margin-bottom: 8px;">${item.title}</h3>
+                        <p style="font-size: 0.9em; opacity: 0.8; line-height: 1.4;">${item.summary}</p>
+                        <div style="margin-top: 10px; font-size: 0.8em; font-weight: bold; color: var(--clr-primary-500);">
+                            Source: ${item.source_name}
+                        </div>
+                    `;
+                }).catch(err => {
+                    console.error('Error fetching reference item:', err);
+                    referenceContent.innerHTML = '<p class="error">Failed to load reference metadata.</p>';
+                });
+            }
+
+            // Auto-fetch if selected (only if not already generating)
             fetchCommentary(selectedCluster);
             fetchPackage(selectedCluster);
         } else {
             banner.style.display = 'none';
+            if (referenceContainer) referenceContainer.style.display = 'none';
         }
 
-        const tabs = document.querySelectorAll('.tab-btn');
+        const tabs = viewContainer.querySelectorAll('.tab-btn');
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const target = tab.dataset.tab;
-                document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                viewContainer.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                viewContainer.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
-                document.getElementById(`${target}-view`).classList.add('active');
+                const targetView = viewContainer.querySelector(`#${target}-view`);
+                if (targetView) targetView.classList.add('active');
             });
         });
 
@@ -312,6 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!selectedCluster) return;
             btnGenerateCommentary.disabled = true;
             btnGenerateCommentary.innerHTML = '<span><i class="dot pulse"></i> Generating...</span>';
+
+            const display = viewContainer.querySelector('#commentary-display');
+            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>'.repeat(3);
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_angles`, { method: 'POST' });
@@ -331,6 +446,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!selectedCluster) return;
             btnGeneratePackage.disabled = true;
             btnGeneratePackage.innerHTML = '<i data-lucide="loader"></i> <span>Generating Package...</span>';
+
+            const display = viewContainer.querySelector('#package-display');
+            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(2);
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_full_package`, { method: 'POST' });

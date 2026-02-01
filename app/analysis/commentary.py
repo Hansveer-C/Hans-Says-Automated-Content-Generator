@@ -200,11 +200,11 @@ class ContentEngine:
     def _get_mock_angle_data(self, cluster_id):
         return {
             "angles": [
-                {"type": "Critical", "content": "Mock critical angle."},
-                {"type": "Comparative", "content": "Mock comparative angle."},
-                {"type": "Accountability", "content": "Mock accountability angle."}
+                {"type": "Critical", "content": f"HANS SAYS: This analysis of '{cluster_id}' exposes significant accountability gaps. The current approach prioritizes PR over policy results."},
+                {"type": "Comparative", "content": f"How does Canada's strategy on '{cluster_id}' compare to the rest of the G7? The data suggests we are falling behind on key transparency metrics."},
+                {"type": "Accountability", "content": f"Who is actually making the calls on '{cluster_id}'? Without a designated lead, accountability remains a revolving door."}
             ],
-            "facebook_post": "Mock Facebook stub."
+            "facebook_post": f"🚨 HANS SAYS: Enough excuses on {cluster_id}. We need names, dates, and clear accountability. Read the full breakdown below. 🚨"
         }
 
     def _get_mock_package_data(self, cluster_id):
