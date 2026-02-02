@@ -67,19 +67,60 @@ class TopicPackage(Base):
     cluster_id = Column(String, index=True)
     date = Column(DateTime, server_default=func.now(), index=True)
     
-    # Package Elements
-    safe_article = Column(Text)
-    safe_headlines = Column(JSON) # List of 3 headlines
-    safe_cta = Column(String)
-    pinned_comment = Column(Text)
+    # 1. Canonical Source Outputs
+    primary_topic = Column(String)
+    secondary_topic = Column(String)
+    core_thesis = Column(Text)
+    editorial_angle = Column(String)
     
-    # Platform Expansion
-    x_thread = Column(JSON) # List of post strings
-    shorts_script = Column(Text)
-    reels_script = Column(Text)
-    seeding_pack = Column(JSON) # { platform: [comments] }
+    # 2. Facebook Page Package
+    facebook_article = Column(Text) # 300-400 words
+    facebook_headlines = Column(JSON) # 3 options
+    facebook_cta = Column(String)
+    facebook_pinned_comment = Column(Text)
     
-    carousel_slides = Column(JSON) # List of slide objects
-    visual_directions = Column(JSON) # List of direction objects
-    recommended_post_time = Column(DateTime)
-    scheduling_metadata = Column(JSON) # timezone, why_this_time_works
+    # 3. Facebook Groups Package
+    facebook_group_post = Column(Text) # conversational/question-forward
+    facebook_group_pinned_comment = Column(Text)
+    group_posting_guidance = Column(Text)
+    
+    # 4. Instagram Reels Package
+    ig_reel_script = Column(JSON) # on-screen text beats
+    ig_caption = Column(Text)
+    ig_hashtags = Column(JSON) # 3-7 tags
+    ig_seed_comments = Column(JSON) # 3
+    ig_pin_comment = Column(Text)
+    
+    # 5. YouTube Shorts Package
+    yt_shorts_script = Column(Text) # timestamped
+    yt_title = Column(String)
+    yt_description = Column(Text)
+    yt_pinned_comment = Column(Text)
+    yt_seed_comments = Column(JSON) # 3
+    
+    # 6. X (Twitter) Package
+    x_primary_post = Column(String) # <= 280 chars
+    x_thread_replies = Column(JSON) # 2-4 optional
+    x_hashtags = Column(JSON) # 0-2 max
+    
+    # 7. Carousel / Slide Video Package
+    carousel_slides = Column(JSON) # 6-8 slides, visual info
+    carousel_caption = Column(Text)
+    
+    # 8. Comment Seeding & Engagement Pack
+    pinned_comment_strategy = Column(Text)
+    seed_comments_per_platform = Column(JSON)
+    creator_reply_templates = Column(JSON) # Agree, Neutral, Calm disagreement
+    
+    # 9. Scheduling & Deployment Plan
+    recommended_post_times = Column(JSON) # Per platform
+    platform_posting_order = Column(JSON) # Platform list
+    staggered_timing_offsets = Column(JSON)
+    posting_reason = Column(Text)
+    next_action = Column(String, default="wait") # post now / wait / scheduled
+    today_queue_position = Column(Integer)
+    
+    # 10. Operator Control Outputs
+    status_flags = Column(JSON, default={"generated": True, "copied": False, "scheduled": False, "posted": False})
+    posted_at = Column(DateTime, nullable=True)
+    notes = Column(Text)

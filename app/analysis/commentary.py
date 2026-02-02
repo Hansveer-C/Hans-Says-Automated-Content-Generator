@@ -47,8 +47,8 @@ class ContentEngine:
             
         commentary = TopicCommentary(
             cluster_id=cluster_id,
-            angles=data["angles"],
-            strongest_angle_html=data["facebook_post"]
+            angles=data.get("angles", []),
+            strongest_angle_html=data.get("facebook_post", "No angle generated.")
         )
         
         db.add(commentary)
@@ -63,7 +63,7 @@ class ContentEngine:
         """
         items = db.query(ContentItem).filter(
             ContentItem.cluster_id == cluster_id
-        ).order_by(ContentItem.final_score.desc()).limit(10).all()
+        ).order_by(ContentItem.final_score.desc()).limit(15).all()
 
         if not items:
             return None
@@ -75,7 +75,11 @@ class ContentEngine:
         if not commentary:
             commentary = self.generate_commentary_angles(db, cluster_id)
 
-        strongest_angle = commentary.strongest_angle_html # This is a placeholder for the actual text
+        if not commentary:
+            print(f"Warning: Failed to generate commentary for {cluster_id}")
+            strongest_angle = "No specific angle refined."
+        else:
+            strongest_angle = commentary.strongest_angle_html or "No specific angle refined."
 
         data = None
         if self.client:
@@ -101,22 +105,61 @@ class ContentEngine:
 
         package = TopicPackage(
             cluster_id=cluster_id,
-            safe_article=data["safe_article"],
-            safe_headlines=data["safe_headlines"],
-            safe_cta=data["safe_cta"],
-            pinned_comment=data["pinned_comment"],
-            x_thread=data.get("x_thread"),
-            shorts_script=data.get("shorts_script"),
-            reels_script=data.get("reels_script"),
-            seeding_pack=data.get("seeding_pack"),
-            carousel_slides=data["carousel_slides"],
-            visual_directions=data["visual_directions"],
-            recommended_post_time=scheduling["time"],
-            scheduling_metadata={
-                "timezone": scheduling["timezone"],
-                "why_this_time_works": scheduling["why"],
-                "staggered_offsets": scheduling["staggered_offsets"]
-            }
+            # 1. Canonical
+            primary_topic=cluster_id,
+            secondary_topic=data.get("secondary_topic", "General Politics"),
+            core_thesis=data.get("core_thesis", "Accountability matters."),
+            editorial_angle=strongest_angle,
+            
+            # 2. Facebook Page
+            facebook_article=data.get("facebook_article", "No article generated."),
+            facebook_headlines=data.get("facebook_headlines", []),
+            facebook_cta=data.get("facebook_cta", ""),
+            facebook_pinned_comment=data.get("facebook_pinned_comment", ""),
+            
+            # 3. Facebook Groups
+            facebook_group_post=data.get("facebook_group_post"),
+            facebook_group_pinned_comment=data.get("facebook_group_pinned_comment"),
+            group_posting_guidance=data.get("group_posting_guidance"),
+            
+            # 4. Instagram
+            ig_reel_script=data.get("ig_reel_script"),
+            ig_caption=data.get("ig_caption"),
+            ig_hashtags=data.get("ig_hashtags"),
+            ig_seed_comments=data.get("ig_seed_comments"),
+            ig_pin_comment=data.get("ig_pin_comment"),
+            
+            # 5. YouTube
+            yt_shorts_script=data.get("yt_shorts_script"),
+            yt_title=data.get("yt_title"),
+            yt_description=data.get("yt_description"),
+            yt_pinned_comment=data.get("yt_pinned_comment"),
+            yt_seed_comments=data.get("yt_seed_comments"),
+            
+            # 6. X
+            x_primary_post=data.get("x_primary_post"),
+            x_thread_replies=data.get("x_thread_replies"),
+            x_hashtags=data.get("x_hashtags"),
+            
+            # 7. Carousel
+            carousel_slides=data.get("carousel_slides"),
+            carousel_caption=data.get("carousel_caption"),
+            
+            # 8. Engagement
+            pinned_comment_strategy=data.get("pinned_comment_strategy"),
+            seed_comments_per_platform=data.get("seed_comments_per_platform"),
+            creator_reply_templates=data.get("creator_reply_templates"),
+            
+            # 9. Scheduling
+            recommended_post_times=scheduling["recommended_times"],
+            platform_posting_order=["X", "Facebook", "Instagram", "YouTube"],
+            staggered_timing_offsets=scheduling["staggered_offsets"],
+            posting_reason=scheduling["why"],
+            next_action="wait",
+            today_queue_position=1,
+            
+            # 10. Operator
+            status_flags={"generated": True, "copied": False, "scheduled": False, "posted": False}
         )
         
         db.add(package)
@@ -131,134 +174,129 @@ class ContentEngine:
 
     def _calculate_scheduling(self, cluster_id, data):
         """
-        Assigns recommended Facebook posting time using Canadian time zones.
-        - Breaking / controversial -> evening prime window
-        - Policy-heavy -> lunch window
-        
-        Includes staggered offsets for other platforms:
+        Assigns recommended posting times using Canadian time zones.
         X (Immediate) -> FB (Offset) -> IG (Offset) -> YT (Offset)
         """
         from datetime import datetime, time, timedelta
-        
-        # Default to today
         now = datetime.now()
         
-        # Heuristic: if cluster is "policy" or "student visas" -> Lunch
         is_policy = any(k in cluster_id.lower() for k in ["policy", "student", "economy", "international"])
         
         if is_policy:
-            # Lunch window: 12:30 PM
             target_time = time(12, 30)
-            why = "Policy-heavy topics perform better in the lunch window when professionals are browsing."
+            why = "Policy topics perform better in the lunch window (12:30 PM EST)."
         else:
-            # Evening prime: 7:30 PM
             target_time = time(19, 30)
-            why = "Controversial or breaking news gains maximum engagement in the evening prime window."
+            why = "Controversial news gains maximum engagement in the evening prime window (7:30 PM EST)."
         
-        # Schedule for today or tomorrow if time passed
-        scheduled_dt = datetime.combine(now.date(), target_time)
-        if scheduled_dt < now:
-            scheduled_dt += timedelta(days=1)
+        base_dt = datetime.combine(now.date(), target_time)
+        if base_dt < now:
+            base_dt += timedelta(days=1)
             
-        return {
-            "time": scheduled_dt,
-            "timezone": "America/Toronto (EST/EDT)",
-            "why": why,
-            "staggered_offsets": {
-                "X": 0,          # X is usually first for breaking news
-                "Facebook": 30,  # +30 mins
-                "Instagram": 60, # +1 hour
-                "YouTube": 120   # +2 hours
-            }
+        offsets = {
+            "X": 0,          # Immediate
+            "Facebook": 30,  # +30 mins
+            "Instagram": 60, # +1 hour
+            "YouTube": 120   # +2 hours
         }
+        
+        recommended_times = {}
+        for platform, offset in offsets.items():
+            platform_time = base_dt + timedelta(minutes=offset)
+            recommended_times[platform] = platform_time.isoformat()
 
-    def _get_angle_prompt(self, cluster_id, context):
-        return f"""
-        Analyze the following top news items for the topic '{cluster_id}':
-        {context}
-        
-        Generate three distinct commentary angles:
-        1. Critical: A deep dive into the flaws or risks.
-        2. Comparative: Analyzing the situation by comparing Canada's approach vs India's (or vice-versa).
-        3. Accountability-focused: Identifying who is responsible and what they should be held to.
-        
-        Finally, identify the STRONGEST angle and rewrite it as a Facebook-ready post stub. 
-        Return in JSON format: {{ "angles": [...], "facebook_post": "..." }}
-        """
+        return {
+            "recommended_times": recommended_times,
+            "staggered_offsets": offsets,
+            "why": why,
+            "timezone": "America/Toronto (EST/EDT)"
+        }
 
     def _get_package_prompt(self, cluster_id, context, strongest_angle):
         return f"""
-        You are HANS SAYS. Your voice is blunt, Canadian, accountability-focused. Use plain spoken language, short sentences. No hashtags, no slogans.
+        You are HANS SAYS. Voice: blunt, Canadian, accountability-focused. Short sentences. No fluff.
         
         Topic: {cluster_id}
-        Selected Angle: {strongest_angle}
-        News Context: {context}
+        Core Angle: {strongest_angle}
+        Context: {context}
         
-        Implement the following steps:
-        1. Article Generation: Write a 300-400 word article. Clear stance, conversational, strong hook.
-        2. Readability Pass: Ensure 6th-grade reading level.
-        3. Facebook Pass: Mobile format, short paragraphs, no bullet points, clean spacing.
-        4. Safety Pass: Identify risky claims and reframe them into defensible language without weakening the stance.
-        5. Headlines: 3 scroll-stopping headlines (under 12 words).
-        6. CTA: 1 engagement CTA.
-        7. Pinned Comment: 1-2 sentences inviting debate, not insults.
-        8. Visual Media: Extract 6-8 visual beats (under 2s each) and carousel slide text (max 12 words).
-        9. X Thread: Generate a 3-4 post thread based on the article. No hashtags.
-        10. YouTube Shorts: Write a 30s high-energy script with timestamps and a pinned comment.
-        11. Instagram Reels: Write a fast-paced script, catchy caption, and 5 hashtags at the end.
-        12. Seeding Pack: 3 recommended seed comments for each platform.
+        Generate the following PLATFORM-SPECIFIC packages in one JSON object:
         
-        Return the result in JSON:
-        {{
-          "safe_article": "...",
-          "safe_headlines": ["...", "...", "..."],
-          "safe_cta": "...",
-          "pinned_comment": "...",
-          "x_thread": ["Post 1 text", "Post 2 text", "..."],
-          "shorts_script": "0:00 - [Hook]...\n0:05 - ...",
-          "reels_script": "Visual: ... Audio: ... Caption: ...",
-          "seeding_pack": {{ "X": ["..."], "YT": ["..."], "IG": ["..."] }},
-          "carousel_slides": [{{ "slide_number": 1, "text": "..." }}, ...],
-          "visual_directions": [{{ "slide_number": 1, "direction": "..." }}, ...],
-          "core_thesis": "..."
-        }}
-        """
+        1. Canonical:
+           - secondary_topic: A related sub-category.
+           - core_thesis: One sentence summary of the stance.
+        
+        2. Facebook Page:
+           - facebook_article: 300-400 words, clear stance, conversational, strong hook.
+           - facebook_headlines: 3 scroll-stopping headlines (<12 words).
+           - facebook_cta: 1 engagement CTA.
+           - facebook_pinned_comment: 1-2 sentences inviting debate.
+           
+        3. Facebook Groups (Adjusted Tone):
+           - facebook_group_post: Conversational, question-forward, group-safe framing.
+           - facebook_group_pinned_comment: Inviting member stories.
+           - group_posting_guidance: Guidance on which groups to target.
+           
+        4. Instagram Reels:
+           - ig_reel_script: List of on-screen text beats (short, punchy).
+           - ig_caption: Hans Says voice, catchy.
+           - ig_hashtags: 3-7 tags.
+           - ig_seed_comments: 3 comments to start engagement.
+           - ig_pin_comment: The main engagement question.
+           
+        5. YouTube Shorts:
+           - yt_shorts_script: Timestamped 20-40s script (Hook, Build, Call to Action).
+           - yt_title: Search-optimized title.
+           - yt_description: Short summary.
+           - yt_pinned_comment: Engagement prompt.
+           - yt_seed_comments: 3 comments.
+           
+        6. X (Twitter):
+           - x_primary_post: Main post <= 280 chars.
+           - x_thread_replies: 2-4 follow-up replies.
+           - x_hashtags: 0-2 tags.
+           
+        7. Carousel/Slides:
+           - carousel_slides: 6-8 slides with text (<=12 words) and visual_direction per slide.
+           - carousel_caption: Summary for the post.
+           
+        8. Engagement scaffolding:
+           - pinned_comment_strategy: How to handle the top comment.
+           - seed_comments_per_platform: Specific comments for FB, YT, IG.
+           - creator_reply_templates: Templates for [Agree, Neutral, Calm disagreement].
 
-    def _get_mock_angle_data(self, cluster_id):
-        return {
-            "angles": [
-                {"type": "Critical", "content": f"HANS SAYS: This analysis of '{cluster_id}' exposes significant accountability gaps. The current approach prioritizes PR over policy results."},
-                {"type": "Comparative", "content": f"How does Canada's strategy on '{cluster_id}' compare to the rest of the G7? The data suggests we are falling behind on key transparency metrics."},
-                {"type": "Accountability", "content": f"Who is actually making the calls on '{cluster_id}'? Without a designated lead, accountability remains a revolving door."}
-            ],
-            "facebook_post": f"🚨 HANS SAYS: Enough excuses on {cluster_id}. We need names, dates, and clear accountability. Read the full breakdown below. 🚨"
-        }
+        Return valid JSON with these keys. No markdown blocks.
+        """
 
     def _get_mock_package_data(self, cluster_id):
         return {
-            "safe_article": f"This is a mock HANS SAYS article about {cluster_id}. It's blunt and Canadian. We need to stop the nonsense and get to work. Accountability is key.",
-            "safe_headlines": [
-                f"The {cluster_id} Crisis: Where is the accountability?",
-                f"Hans Says: Stop Ignoring the {cluster_id} Problem",
-                f"Why Canada is failing on {cluster_id}"
-            ],
-            "safe_cta": "Do you agree? Comments below.",
-            "pinned_comment": "Keep the debate focused on facts.",
-            "x_thread": [
-                f"1/ The situation with {cluster_id} has reached a breaking point. No more hyphens, no more excuses.",
-                "2/ We've looked at the data. The current strategy is failing Canadian families.",
-                "3/ It's time for leadership to step up or step aside. #HansSays"
-            ],
-            "shorts_script": "0:00 - [Hook] You think you know what's happening with immigration?\n0:05 - Think again. We're capping the nonsense today.",
-            "reels_script": "Visual: Fast cuts of Ottawa. Audio: Hans voice. Caption: No more excuses.",
-            "seeding_pack": {
-                "X": ["Spot on Hans.", "Someone had to say it."],
-                "YT": ["Great breakdown.", "Finally some truth."],
-                "IG": ["Hard truths.", "Need more of this."]
-            },
-            "carousel_slides": [{"slide_number": 1, "text": "Slide 1 text"}],
-            "visual_directions": [{"slide_number": 1, "direction": "Abstract symbolic visual"}],
-            "scheduling_metadata": {"timezone": "America/Toronto", "why": "Evening prime window"}
+            "secondary_topic": "Federal Oversight",
+            "core_thesis": f"The handling of {cluster_id} shows a total lack of transparency.",
+            "facebook_article": f"Look, we've seen this before. {cluster_id} is a mess because nobody wants to take responsibility. We checked the records. The numbers don't lie. Canadians deserve better than these half-measures.",
+            "facebook_headlines": [f"The {cluster_id} Cover-up?", f"Hans Says: Enough with {cluster_id}", "Accountability Now"],
+            "facebook_cta": "What do you think? Let's hear it below.",
+            "facebook_pinned_comment": "Keep it civil, keep it factual.",
+            "facebook_group_post": f"Quick question for the group: How has the {cluster_id} situation affected your local community? We're looking into the lack of federal response.",
+            "facebook_group_pinned_comment": "We want to hear your personal stories.",
+            "group_posting_guidance": "Post in local community groups and political watchdog groups.",
+            "ig_reel_script": [{"beat": "0:00", "text": "Fed up?"}, {"beat": "0:02", "text": f"{cluster_id} is breaking."}],
+            "ig_caption": "No more excuses on this one. Link in bio for the full data.",
+            "ig_hashtags": ["#CanadaPolitics", "#HansSays", f"#{cluster_id.replace(' ', '')}"],
+            "ig_seed_comments": ["Finally!", "Spot on.", "Need more of this."],
+            "ig_pin_comment": "Is it time for a change?",
+            "yt_shorts_script": "0:00 - They said it was handled.\n0:10 - The data says otherwise.\n0:20 - Demand better.",
+            "yt_title": f"The TRUTH about {cluster_id} in Canada",
+            "yt_description": "Hans breaks down the latest failures in oversight.",
+            "yt_pinned_comment": "Subscribe for more accountability.",
+            "yt_seed_comments": ["Great info.", "Share this.", "Keep it up."],
+            "x_primary_post": f"No more excuses on {cluster_id}. The data is clear: oversight failed. Full breakdown coming.",
+            "x_thread_replies": ["Oversight was warned in 2023.", "Action was promised, none taken.", "Canadians are paying the price."],
+            "x_hashtags": ["#canpol", f"#{cluster_id.replace(' ', '')}"],
+            "carousel_slides": [{"slide": 1, "text": "The Crisis", "visual": "Chart showing decline"}],
+            "carousel_caption": "The full story in slides.",
+            "pinned_comment_strategy": "Highlight the most thoughtful critique and reply with data.",
+            "seed_comments_per_platform": {"FB": ["True.", "Sad."], "X": ["Exactly.", "Read this."]},
+            "creator_reply_templates": {"Agree": "Spot on. We need more eyes on this.", "Neutral": "Fair point, though the data suggests otherwise.", "Calm disagreement": "I hear you, but let's look at the actual outcomes."}
         }
 
 # For backward compatibility during migration

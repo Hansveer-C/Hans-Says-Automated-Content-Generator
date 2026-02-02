@@ -447,15 +447,16 @@ document.addEventListener('DOMContentLoaded', () => {
             btnGeneratePackage.disabled = true;
             btnGeneratePackage.innerHTML = '<i data-lucide="loader"></i> <span>Generating Package...</span>';
 
-            const display = viewContainer.querySelector('#package-display');
-            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(2);
+            const display = viewContainer.querySelector('#package-content-area');
+            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(3);
 
             try {
                 const response = await fetch(`/topics/${selectedCluster}/generate_full_package`, { method: 'POST' });
                 const data = await response.json();
                 btnGeneratePackage.disabled = false;
                 btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
-                if (data.safe_article) renderPackage(data);
+                if (data.primary_topic || data.cluster_id) renderPackage(data);
+                else alert('Error: ' + (data.error || 'Failed to generate package.'));
             } catch (e) {
                 btnGeneratePackage.disabled = false;
                 btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
@@ -478,12 +479,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchPackage(cluster_id) {
-        const display = document.getElementById('package-display');
-        display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(2);
+        const display = document.getElementById('package-content-area');
+        if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(3);
         try {
             const response = await fetch(`/topics/${cluster_id}/package`);
             const data = await response.json();
-            if (data && data.safe_article) renderPackage(data);
+            if (data && (data.primary_topic || data.cluster_id)) renderPackage(data);
             else display.innerHTML = '<p class="placeholder-text">No package generated. Click "Generate Platform Package" to start.</p>';
         } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate Platform Package" to start.</p>'; }
     }
@@ -512,82 +513,205 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
+    let currentPackageData = null;
+
     function renderPackage(data) {
+        currentPackageData = data;
         const display = document.getElementById('package-display');
-        if (!display) return;
+        const contentArea = document.getElementById('package-content-area');
+        if (!display || !contentArea) return;
 
-        const headlinesHtml = data.safe_headlines.map(h => `<div class="headline-item">${h}</div>`).join('');
-        const slidesHtml = data.carousel_slides.map(s => `<div class="beat-card"><div class="beat-number">Slide ${s.slide_number}</div>${s.text}</div>`).join('');
-        const directionsHtml = data.visual_directions.map(d => `<div class="beat-card"><div class="beat-number">Visual ${d.slide_number}</div>${d.direction}</div>`).join('');
+        // Initialize sub-tabs
+        const subTabs = display.querySelectorAll('.sub-tab-btn');
+        subTabs.forEach(tab => {
+            tab.onclick = () => {
+                subTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderSubTab(tab.dataset.subtab);
+            };
+        });
 
-        // X Thread
-        const xThreadHtml = data.x_thread ? data.x_thread.map((p, i) => `
-            <div class="x-post-preview" style="padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 8px; background: rgba(0,0,0,0.2);">
-                <div style="font-size: 0.7em; color: #1da1f2; margin-bottom: 4px; font-weight: bold;">[Post ${i + 1}]</div>
-                ${p}
-            </div>
-        `).join('') : '<p class="placeholder-text">No X thread generated.</p>';
-
-        // Seeding Pack
-        const seedingHtml = data.seeding_pack ? Object.entries(data.seeding_pack).map(([platform, comments]) => `
-            <div style="margin-bottom: 10px;">
-                <div style="font-size: 0.8em; font-weight: bold; color: var(--clr-primary-400);">${platform} Seeds:</div>
-                <ul style="padding-left: 20px; font-size: 0.85em; opacity: 0.8;">
-                    ${comments.map(c => `<li>${c}</li>`).join('')}
-                </ul>
-            </div>
-        `).join('') : '';
-
-        display.innerHTML = `
-            <div class="studio-content-stack" style="display: flex; flex-direction: column; gap: 24px;">
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="megaphone"></i> Scroll-Stopping Headlines</div>
-                    ${headlinesHtml}
-                </div>
-                
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="twitter"></i> X Thread (Repurposed)</div>
-                    ${xThreadHtml}
-                </div>
-
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="video"></i> YouTube Shorts & Reels Scripts</div>
-                    <div class="scripts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div class="script-box glass" style="padding: 12px;">
-                            <div style="color: #ff0000; font-weight: bold; font-size: 0.8em; margin-bottom: 8px;"><i data-lucide="youtube"></i> YT Shorts</div>
-                            <pre style="font-size: 0.85em; white-space: pre-wrap; font-family: inherit;">${data.shorts_script || 'Not generated'}</pre>
-                        </div>
-                        <div class="script-box glass" style="padding: 12px;">
-                            <div style="color: #e4405f; font-weight: bold; font-size: 0.8em; margin-bottom: 8px;"><i data-lucide="instagram"></i> IG Reels</div>
-                            <pre style="font-size: 0.85em; white-space: pre-wrap; font-family: inherit;">${data.reels_script || 'Not generated'}</pre>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="file-text"></i> Safe Article (Revised)</div>
-                    <div class="article-body">${data.safe_article.replace(/\n/g, '<br>')}</div>
-                </div>
-
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="message-square"></i> Seeding & engagement CTA</div>
-                    <div class="cta-box" style="margin-bottom: 12px;">${data.safe_cta}</div>
-                    <div class="seeding-pack-display glass" style="padding: 12px;">
-                        ${seedingHtml}
-                        <p style="margin-top: 10px; font-size: 0.9em; opacity: 1; color: var(--clr-primary-300);"><b>Pinned Comment:</b> ${data.pinned_comment}</p>
-                    </div>
-                </div>
-
-                <div class="view-section">
-                    <div class="section-label"><i data-lucide="layout"></i> Carousel Assets (Visual Media)</div>
-                    <div class="beats-grid">${slidesHtml}</div>
-                    <div class="beats-grid" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-                        ${directionsHtml}
-                    </div>
-                </div>
-            </div>
-        `;
+        // Initial render
+        renderSubTab('canonical');
         if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function renderSubTab(tabName) {
+        const area = document.getElementById('package-content-area');
+        if (!area || !currentPackageData) return;
+        const data = currentPackageData;
+
+        let html = '';
+        switch (tabName) {
+            case 'canonical':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="info"></i> Canonical Source Outputs</div>
+                        <div class="headline-item" style="background: rgba(16, 185, 129, 0.1); color: var(--clr-success);">Primary: ${data.primary_topic || 'Not set'}</div>
+                        <div class="headline-item">Secondary: ${data.secondary_topic || 'Not set'}</div>
+                        <div class="cta-box" style="margin-top: 12px; border-style: solid;">
+                            <strong>Core Thesis:</strong><br>${data.core_thesis || 'Not set'}
+                        </div>
+                        <div class="facebook-card" style="margin-top: 12px; border-color: rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                            <div class="section-label">Editorial Angle</div>
+                            <div style="font-size: 0.9em; opacity: 0.9;">${data.editorial_angle || 'Not set'}</div>
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'facebook':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="facebook"></i> Facebook Page Package</div>
+                        <div class="article-body" style="margin-bottom: 20px;">${(data.facebook_article || '').replace(/\n/g, '<br>')}</div>
+                        <div class="section-label">Headlines (Scroll-Stopping)</div>
+                        ${(data.facebook_headlines || []).map(h => `<div class="headline-item">${h}</div>`).join('')}
+                        <div class="section-label" style="margin-top: 16px;">Call to Action</div>
+                        <div class="cta-box">${data.facebook_cta || 'No CTA generated'}</div>
+                        <div class="section-label" style="margin-top: 16px;">Pinned Comment</div>
+                        <div class="beat-card" style="padding: 12px; border: 1px solid var(--clr-primary-500);">${data.facebook_pinned_comment || ''}</div>
+                    </div>
+                    <div class="view-section" style="margin-top: 12px;">
+                        <div class="section-label"><i data-lucide="users"></i> Facebook Groups (Conversational)</div>
+                        <div class="cta-box" style="background: rgba(255,255,255,0.03); border-color: var(--clr-primary-400); color: white;">
+                             ${(data.facebook_group_post || '').replace(/\n/g, '<br>')}
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.85em;">
+                            <strong>Guidance:</strong> ${data.group_posting_guidance || 'No specific guidance.'}
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'instagram':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="instagram"></i> Instagram Reels Package</div>
+                        <div class="section-label">Reel Script (Text Beats)</div>
+                        <div class="beats-grid">
+                            ${(data.ig_reel_script || []).map(b => `<div class="beat-card"><div class="beat-number">${b.beat}</div>${b.text}</div>`).join('')}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Caption & Hashtags</div>
+                        <div class="article-body" style="font-size: 0.9em; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                            ${(data.ig_caption || '').replace(/\n/g, '<br>')}
+                            <div style="margin-top: 8px; color: var(--clr-primary-400);">${(data.ig_hashtags || []).join(' ')}</div>
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Seeding & Pins</div>
+                        <div class="beat-card" style="border-left: 4px solid #e4405f;">
+                            <strong>Pin:</strong> ${data.ig_pin_comment || 'None'}
+                        </div>
+                        <ul style="margin-top: 8px; font-size: 0.85em; opacity: 0.8; padding-left: 20px;">
+                            ${(data.ig_seed_comments || []).map(c => `<li>${c}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+                break;
+            case 'youtube':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="youtube"></i> YouTube Shorts Package</div>
+                        <div class="headline-item" style="margin-bottom: 12px; background: #ff000010; border: 1px solid #ff000030;">${data.yt_title || 'No title'}</div>
+                        <div class="section-label">Script (20-40s)</div>
+                        <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9em; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">${data.yt_shorts_script || ''}</pre>
+                        <div class="section-label" style="margin-top: 16px;">Engagement</div>
+                        <div class="beat-card"><strong>Pinned:</strong> ${data.yt_pinned_comment || ''}</div>
+                        <ul style="margin-top: 8px; font-size: 0.85em; opacity: 0.8; padding-left: 20px;">
+                            ${(data.yt_seed_comments || []).map(c => `<li>${c}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+                break;
+            case 'x':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="twitter"></i> X (Twitter) Package</div>
+                        <div class="cta-box" style="background: #000; border-color: #1da1f2; color: #fff; font-size: 1.1em;">
+                            ${data.x_primary_post || ''}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Thread Replies</div>
+                        ${(data.x_thread_replies || []).map((p, i) => `
+                            <div class="beat-card" style="margin-bottom: 8px;">
+                                <div class="beat-number">Reply ${i + 1}</div>
+                                ${p}
+                            </div>
+                        `).join('')}
+                        <div style="color: #1da1f2; font-size: 0.8em; margin-top: 8px;">${(data.x_hashtags || []).join(' ')}</div>
+                    </div>
+                `;
+                break;
+            case 'carousel':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="layers"></i> Carousel / Slide Package</div>
+                        <div class="beats-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            ${(data.carousel_slides || []).map(s => `
+                                <div class="beat-card" style="border: 1px solid rgba(255,255,255,0.05);">
+                                    <div class="beat-number">Slide ${s.slide || s.slide_number}</div>
+                                    <div style="font-weight: bold; margin-bottom: 4px;">${s.text}</div>
+                                    <div style="font-size: 0.8em; opacity: 0.6;"><em>Visual: ${s.visual || 'No direction'}</em></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Caption</div>
+                        <div class="article-body" style="font-size: 0.9em;">${data.carousel_caption || ''}</div>
+                    </div>
+                `;
+                break;
+            case 'engagement':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="message-circle"></i> Comment Seeding & Scaffolding</div>
+                        <div class="beat-card" style="background: rgba(16, 185, 129, 0.05); border: 1px solid var(--clr-success);">
+                            <strong>Strategy:</strong> ${data.pinned_comment_strategy || ''}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Global Seed Comments</div>
+                        <div class="beats-grid">
+                            ${Object.entries(data.seed_comments_per_platform || {}).map(([p, c]) => `
+                                <div class="beat-card">
+                                    <div class="beat-number">${p}</div>
+                                    <ul style="padding-left: 14px;">${(c || []).map(li => `<li>${li}</li>`).join('')}</ul>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Creator Reply Templates</div>
+                        <div class="beats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                            ${Object.entries(data.creator_reply_templates || {}).map(([type, tpl]) => `
+                                <div class="beat-card">
+                                    <div class="beat-number">${type}</div>
+                                    ${tpl}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'scheduling':
+                html = `
+                    <div class="view-section">
+                        <div class="section-label"><i data-lucide="calendar"></i> Deployment & Scheduling Plan</div>
+                        <div class="cta-box" style="border-style: solid; background: rgba(59, 130, 246, 0.05);">
+                            <strong>Ideal Window:</strong> ${data.posting_reason || ''}
+                        </div>
+                        <div class="section-label" style="margin-top: 16px;">Staggered Platform Launch</div>
+                        <div class="beats-grid">
+                            ${Object.entries(data.recommended_post_times || {}).map(([p, t]) => `
+                                <div class="beat-card">
+                                    <div class="beat-number">${p}</div>
+                                    <div style="font-weight: bold;">${new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div style="font-size: 0.7em; opacity: 0.5;">${new Date(t).toLocaleDateString()}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+                            <span class="badge active">Queue Position: ${data.today_queue_position || '1'}</span>
+                            <span class="badge" style="background: rgba(255,255,255,0.1);">Next Action: ${data.next_action || 'wait'}</span>
+                        </div>
+                    </div>
+                `;
+                break;
+        }
+
+        area.innerHTML = html;
+        lucide.createIcons();
     }
 
     async function renderAdmin() {
