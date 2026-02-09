@@ -1430,3 +1430,272 @@ nav {
 .close-modal:hover {
     color: var(--clr-error);
 }
+
+/* --- Global Primitives & Component Styles (Overhaul) --- */
+
+/* Score Badges */
+.score-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: var(--fw-bold);
+    color: var(--text-secondary);
+}
+
+.score-badge.controversy {
+    color: var(--clr-warning);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.score-badge.final {
+    color: var(--clr-primary-500);
+    border-color: rgba(0, 200, 83, 0.3);
+}
+
+.score-badge.cluster {
+    color: #8b5cf6;
+    border-color: rgba(139, 92, 246, 0.3);
+}
+
+/* Status Chips */
+.status-chip {
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.05em;
+    background: var(--clr-neutral-800);
+    color: var(--clr-neutral-400);
+}
+
+.status-chip.active {
+    background: var(--clr-primary-500);
+    color: white;
+}
+
+.status-chip.warning {
+    background: var(--clr-warning);
+    color: var(--clr-neutral-950);
+}
+
+.status-chip.error {
+    background: var(--clr-error);
+    color: white;
+}
+
+/* Global Buttons (Primitives) */
+.btn-primitive {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: var(--sp-1) var(--sp-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    transition: var(--tr-fast);
+}
+
+.btn-primitive:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: var(--clr-neutral-400);
+}
+
+.btn-primitive i {
+    width: 12px;
+    height: 12px;
+}
+
+/* Inline Editor */
+.inline-editor-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    width: 100%;
+}
+
+.inline-editor {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: var(--sp-2);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    line-height: var(--lh-relaxed);
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.inline-editor:focus {
+    outline: none;
+    border-color: var(--clr-primary-500);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Validation Banners */
+.validation-banner {
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-xs);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+.validation-banner.success {
+    background: rgba(0, 200, 83, 0.1);
+    color: var(--clr-success);
+    border: 1px solid rgba(0, 200, 83, 0.2);
+}
+
+.validation-banner.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--clr-warning);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.validation-banner.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--clr-error);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Readiness Badges */
+.readiness-badge {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.readiness-badge.ready {
+    background: var(--clr-success);
+    box-shadow: 0 0 8px var(--clr-success);
+}
+
+.readiness-badge.warning {
+    background: var(--clr-warning);
+    box-shadow: 0 0 8px var(--clr-warning);
+}
+
+.readiness-badge.blocked {
+    background: var(--clr-error);
+    box-shadow: 0 0 8px var(--clr-error);
+}
+
+/* Dashboard Signals */
+.platform-signal-grid {
+    display: flex;
+    gap: var(--sp-2);
+    margin-top: var(--sp-2);
+}
+
+.platform-signal {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    opacity: 0.3;
+}
+
+.platform-signal.active {
+    opacity: 1;
+    color: var(--clr-primary-500);
+    background: rgba(0, 200, 83, 0.1);
+}
+
+/* Layout adjustments */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 400px;
+    gap: var(--sp-6);
+    height: calc(100vh - 120px);
+}
+
+.filter-sidebar {
+    background: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    padding: var(--sp-6);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+    overflow-y: auto;
+}
+
+.detail-drawer {
+    background: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    padding: var(--sp-6);
+    border: 1px solid var(--border-subtle);
+    overflow-y: auto;
+}
+
+/* Studio Overhaul */
+.studio-cockpit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+}
+
+.platform-row {
+    background: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    transition: var(--tr-base);
+    margin-bottom: var(--sp-6);
+}
+
+.platform-row-header {
+    padding: var(--sp-4) var(--sp-6);
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.platform-row-content {
+    padding: var(--sp-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+}
+
+.composer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--sp-6);
+}
+
+.composition-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+}
+
+.field-label {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+}

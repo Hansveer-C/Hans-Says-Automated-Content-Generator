@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Global event listener for Add Stream button (if it exists in the view)
+        // Global event listener for Add Stream button
         const btnAddStream = document.getElementById('btn-add-stream');
         if (btnAddStream) {
             btnAddStream.onclick = () => handleAddStream();
@@ -58,769 +58,479 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
+    /* --- UI Component Registry --- */
+    const UI = {
+        scoreBadge: (type, value) => `
+            <div class="score-badge ${type}">
+                <i data-lucide="${type === 'controversy' ? 'alert-circle' : (type === 'final' ? 'award' : 'hash')}"></i>
+                <span>${value}</span>
+            </div>`,
+
+        statusChip: (status, active = false) => `
+            <div class="status-chip ${active ? 'active' : ''}">${status}</div>`,
+
+        copyButton: (text, label = "Copy") => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-primitive';
+            btn.innerHTML = `<i data-lucide="copy"></i><span>${label}</span>`;
+            btn.onclick = () => {
+                navigator.clipboard.writeText(text);
+                btn.innerHTML = `<i data-lucide="check"></i><span>Copied!</span>`;
+                setTimeout(() => {
+                    btn.innerHTML = `<i data-lucide="copy"></i><span>${label}</span>`;
+                    lucide.createIcons();
+                }, 2000);
+            };
+            return btn;
+        },
+
+        validationBanner: (results) => {
+            if (results.errors.length > 0) {
+                return `<div class="validation-banner error"><i data-lucide="x-circle"></i><span>${results.errors[0]}</span></div>`;
+            }
+            if (results.warnings.length > 0) {
+                return `<div class="validation-banner warning"><i data-lucide="alert-triangle"></i><span>${results.warnings[0]}</span></div>`;
+            }
+            return `<div class="validation-banner success"><i data-lucide="check-circle"></i><span>Ready to Publish</span></div>`;
+        },
+
+        inlineEditor: (id, label, value, onUpdate) => {
+            const div = document.createElement('div');
+            div.className = 'inline-editor-container';
+            div.innerHTML = `
+                <div class="field-label" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span>${label}</span>
+                    <button class="btn-primitive copy-field" style="padding:2px 6px; font-size:10px;"><i data-lucide="copy" style="width:10px;"></i></button>
+                </div>
+                <textarea id="${id}" class="field-value glass" style="width:100%; min-height:80px; background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:8px; color:white; padding:10px; font-size:13px; font-family:inherit; resize:vertical;">${value || ''}</textarea>
+            `;
+            const textarea = div.querySelector('textarea');
+            textarea.oninput = () => onUpdate(textarea.value);
+
+            div.querySelector('.copy-field').onclick = () => {
+                navigator.clipboard.writeText(textarea.value);
+            };
+
+            return div;
+        }
+    };
+
+    /* --- Validation Engine --- */
+    const ValidationRules = {
+        global: (pkg) => {
+            const errors = [];
+            const warnings = [];
+            if (pkg.used_for_content) warnings.push("Item already marked as used.");
+            const age = (new Date() - new Date(pkg.date)) / (1000 * 60 * 60);
+            if (age > 72) warnings.push("Content is older than 72 hours.");
+            return { errors, warnings };
+        },
+
+        facebook: (pkg) => {
+            const errors = [];
+            const warnings = [];
+            if (!pkg.facebook_post_body) errors.push("Post body is required.");
+            else {
+                const words = pkg.facebook_post_body.split(/\s+/).length;
+                if (words < 250) errors.push("Post body is too short (min 250 words).");
+                if (words > 500) errors.push("Post body is too long (max 500 words).");
+                if (!pkg.facebook_post_body.includes('\n\n')) errors.push("Missing paragraph breaks.");
+            }
+            if (!pkg.facebook_pinned_comment) errors.push("Pinned comment required.");
+            if (!pkg.facebook_headlines || pkg.facebook_headlines.length < 3) errors.push("Missing 3 headlines.");
+            return { errors, warnings };
+        },
+
+        instagram: (pkg) => {
+            const errors = [];
+            const warnings = [];
+            if (!pkg.ig_on_screen_text || pkg.ig_on_screen_text.length < 6) errors.push("Minimum 6 text beats required.");
+            if (pkg.ig_on_screen_text && pkg.ig_on_screen_text.some(t => t.split(' ').length > 10)) errors.push("Beat text exceeds 10 words.");
+            if (!pkg.ig_caption) errors.push("Caption required.");
+            return { errors, warnings };
+        },
+
+        twitter: (pkg) => {
+            const errors = [];
+            const warnings = [];
+            if (!pkg.x_primary_post) errors.push("Primary post required.");
+            else if (pkg.x_primary_post.length > 280) errors.push("Post exceeds 280 characters.");
+            return { errors, warnings };
+        }
+    };
+
+    function validatePackage(pkg) {
+        const platforms = ['global', 'facebook', 'instagram', 'twitter'];
+        const report = {};
+        let overallBlocked = false;
+
+        platforms.forEach(p => {
+            if (ValidationRules[p]) {
+                const res = ValidationRules[p](pkg);
+                report[p] = res;
+                if (res.errors.length > 0) overallBlocked = true;
+            }
+        });
+
+        return { report, overallBlocked };
+    }
+
     // Dashboard Logic
     async function renderDashboard(filter = 'all', query = '') {
         const streamsContainer = document.getElementById('feed-grid');
-        const filterPills = document.getElementById('filter-pills');
-        streamsContainer.innerHTML = '<div class="loading-shimmer" style="width: 350px;"></div>'.repeat(3);
+        const filterSidebar = document.getElementById('filter-sidebar');
+        if (!streamsContainer || !filterSidebar) return;
+
+        streamsContainer.innerHTML = '<div class="loading-shimmer"></div>';
+
+        // Filter state
+        const state = {
+            source: filterSidebar.querySelector('[data-source].active')?.dataset.source || 'all',
+            signal: filterSidebar.querySelector('[data-signal].active')?.dataset.signal || null,
+            minScore: document.getElementById('filter-min-score')?.value || 0,
+            used: filterSidebar.querySelector('[data-used].active')?.dataset.used || 'all',
+            search: document.getElementById('feed-search')?.value || query
+        };
 
         try {
-            // Fetch and render dynamic topic filters (Channels in HootSuite parlance)
-            const trendingRes = await fetch('/trending');
-            const trends = await trendingRes.json();
+            let url = `/items?limit=100`;
+            if (state.source !== 'all') url += `&source_type=${state.source}`;
+            if (state.used === 'unused') url += `&used=false`;
+            if (state.search) url += `&q=${encodeURIComponent(state.search)}`;
 
-            filterPills.innerHTML = `<button class="pill ${filter === 'all' ? 'active' : ''}" data-filter="all">All Channels</button>`;
-            Object.entries(trends).forEach(([name, count]) => {
-                filterPills.innerHTML += `<button class="pill ${filter === name ? 'active' : ''}" data-filter="${name}">${name} <small>(${count})</small></button>`;
+            const res = await fetch(url);
+            let items = await res.json();
+
+            // Client-side filtering
+            items = items.filter(item => {
+                if (item.final_score < state.minScore) return false;
+                if (state.signal) {
+                    const signals = calculateSignals(item);
+                    if (!signals[state.signal]) return false;
+                }
+                return true;
             });
 
-            const streamCategories = filter === 'all' ? Object.keys(trends).slice(0, 3) : [filter];
             streamsContainer.innerHTML = '';
-
-            for (const cat of streamCategories) {
-                const streamColumn = document.createElement('div');
-                streamColumn.className = 'stream-column';
-                streamColumn.innerHTML = `
-                    <div class="stream-header">
-                        <div class="stream-title">
-                            <i data-lucide="hash"></i>
-                            <span>${cat.charAt(0).toUpperCase() + cat.slice(1)} Feed</span>
-                        </div>
-                        <i data-lucide="more-vertical" style="cursor: pointer;"></i>
-                    </div>
-                    <div class="stream-content" id="stream-${cat}">
-                        <div class="loading-shimmer"></div>
-                    </div>
-                `;
-                streamsContainer.appendChild(streamColumn);
-
-                // Fetch items for this stream
-                let url = `/items?limit=15&q=${cat}`;
-                if (query) url += `&q=${query}`;
-
-                fetch(url).then(res => res.json()).then(items => {
-                    const contentDiv = document.getElementById(`stream-${cat}`);
-                    contentDiv.innerHTML = '';
-                    items.forEach(item => {
-                        contentDiv.appendChild(createCard(item));
-                    });
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching items/trends:', error);
-            streamsContainer.innerHTML = '<p class="error">Failed to load streams. Please try again.</p>';
-        }
-    }
-
-    // Composer Logic
-    const composerModal = document.getElementById('composer-modal');
-    const btnOpenComposer = document.getElementById('btn-open-composer');
-    const btnCloseComposer = document.getElementById('close-composer');
-    const composerText = document.getElementById('composer-text');
-    const previewText = document.getElementById('preview-text-content');
-
-    if (btnOpenComposer) {
-        btnOpenComposer.onclick = () => composerModal.classList.add('active');
-    }
-
-    if (btnCloseComposer) {
-        btnCloseComposer.onclick = () => composerModal.classList.remove('active');
-    }
-
-    if (composerText) {
-        composerText.oninput = (e) => {
-            previewText.textContent = e.target.value || "Your post content will appear here...";
-        };
-    }
-
-    async function handleAddStream() {
-        const topic = prompt("Enter a topic or keyword to add as a new stream (e.g., 'Economy', 'Technology', 'Healthcare'):");
-        if (!topic) return;
-
-        const streamsContainer = document.getElementById('feed-grid');
-        const cat = topic.toLowerCase().trim();
-
-        // Check if stream already exists
-        if (document.getElementById(`stream-${cat}`)) {
-            alert("This stream is already active!");
-            return;
-        }
-
-        const streamColumn = document.createElement('div');
-        streamColumn.className = 'stream-column';
-        streamColumn.innerHTML = `
-            <div class="stream-header">
-                <div class="stream-title">
-                    <i data-lucide="hash"></i>
-                    <span>${topic} Feed</span>
-                </div>
-                <i data-lucide="more-vertical" style="cursor: pointer;"></i>
-            </div>
-            <div class="stream-content" id="stream-${cat}">
-                <div class="loading-shimmer"></div>
-            </div>
-        `;
-        streamsContainer.appendChild(streamColumn);
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-
-        // Fetch items for the new stream
-        fetch(`/items?limit=15&q=${cat}`).then(res => res.json()).then(items => {
-            const contentDiv = document.getElementById(`stream-${cat}`);
-            contentDiv.innerHTML = '';
             if (items.length === 0) {
-                contentDiv.innerHTML = '<p class="placeholder-text" style="margin-top: 20px;">No recent items found for this topic.</p>';
+                streamsContainer.innerHTML = '<div class="placeholder-text">No items match your filters.</div>';
             } else {
                 items.forEach(item => {
-                    contentDiv.appendChild(createCard(item));
+                    streamsContainer.appendChild(createCard(item));
                 });
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
-        }).catch(err => {
-            console.error(`Error fetching items for ${cat}:`, err);
-            document.getElementById(`stream-${cat}`).innerHTML = '<p class="error">Failed to load items.</p>';
-        });
+        } catch (error) {
+            console.error('Error fetching items:', error);
+            streamsContainer.innerHTML = '<p class="error">Failed to load feed. Please try again.</p>';
+        }
+    }
+
+    async function handleAddStream() {
+        const topic = prompt("Enter a topic to watch:");
+        if (!topic) return;
+        renderDashboard('all', topic);
     }
 
     function createCard(item) {
         const div = document.createElement('div');
-        div.className = 'content-card';
-        div.style.cursor = 'pointer';
+        div.className = 'content-card glass';
 
-        const typeClass = item.source_type === 'news' ? 'tag-news' : 'tag-reddit';
-        const typeLabel = item.source_type === 'news' ? 'News' : 'Reddit';
-
-        const metrics = item.engagement_metrics || {};
-        const score = metrics.score !== undefined ? `<div class="metric"><i data-lucide="arrow-big-up"></i>${metrics.score}</div>` : '';
-        const comments = metrics.num_comments !== undefined ? `<div class="metric"><i data-lucide="message-square"></i>${metrics.num_comments}</div>` : '';
-
-        const statusTag = item.is_unavailable ?
-            '<span class="card-tag tag-unavailable">Unavailable</span>' :
-            (item.enrichment_status === 'generated' ? '<span class="card-tag tag-refined">Summary (AI)</span>' : '');
-
-        div.innerHTML = `
-            <div class="card-tags">
-                <span class="card-tag ${typeClass}">${typeLabel}</span>
-                ${statusTag}
-            </div>
-            <div class="card-title">${item.title}</div>
-            <p class="card-summary">${item.summary || 'No summary available.'}</p>
-            <div class="card-footer">
-                <span class="card-source">${item.source_name}</span>
-                <div class="card-metrics">
-                    ${score}
-                    ${comments}
-                    <div class="metric"><i data-lucide="globe"></i>${item.country}</div>
-                </div>
-            </div>
-            <div class="card-promote-overlay">
-                <button class="btn-promote-studio-icon" title="Send to Studio">
-                    <i data-lucide="zap"></i>
-                </button>
+        const signals = calculateSignals(item);
+        const signalHtml = `
+            <div class="platform-signal-grid" style="display:flex; gap:6px; margin-top:10px;">
+                <div class="platform-signal ${signals.fb ? 'active' : ''}" title="Facebook"><i data-lucide="facebook"></i></div>
+                <div class="platform-signal ${signals.ig ? 'active' : ''}" title="Instagram"><i data-lucide="instagram"></i></div>
+                <div class="platform-signal ${signals.yt ? 'active' : ''}" title="YouTube"><i data-lucide="youtube"></i></div>
+                <div class="platform-signal ${signals.x ? 'active' : ''}" title="X"><i data-lucide="twitter"></i></div>
             </div>
         `;
 
-        // Ensure Eye icon is ALWAYS present in a consistent container
-        const metricsContainer = div.querySelector('.card-metrics');
-        const viewBtn = document.createElement('button');
-        viewBtn.className = 'btn-icon-sm';
-        viewBtn.innerHTML = '<i data-lucide="eye"></i>';
-        viewBtn.title = 'View Details';
-        viewBtn.onclick = (e) => {
-            e.stopPropagation();
-            openReadingPane(item);
+        div.innerHTML = `
+            <div class="card-tags">
+                <span class="card-tag ${item.source_type === 'news' ? 'tag-news' : 'tag-reddit'}">${item.source_type.toUpperCase()}</span>
+                ${item.used_for_content ? '<span class="status-chip active">USED</span>' : ''}
+            </div>
+            <div class="card-title">${item.title}</div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                ${UI.scoreBadge('hash', item.controversy_score.toFixed(1))}
+                ${UI.scoreBadge('final', item.final_score.toFixed(1))}
+            </div>
+            ${signalHtml}
+            <div class="card-footer" style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+                <span class="card-source">${item.source_name}</span>
+                <span style="font-size:10px; opacity:0.5;">${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+        `;
+
+        div.onclick = () => openDetailDrawer(item);
+        return div;
+    }
+
+    function calculateSignals(item) {
+        return {
+            fb: item.source_type === 'news' || item.summary?.length > 200,
+            ig: item.source_type === 'reddit' || item.title?.length < 80,
+            yt: item.source_type === 'news' && item.summary?.length > 150,
+            x: item.title?.length < 150
         };
-        metricsContainer.appendChild(viewBtn);
+    }
 
-        const promoteItem = async (e) => {
-            if (e) e.stopPropagation();
+    function openDetailDrawer(item) {
+        const drawer = document.getElementById('detail-drawer');
+        const emptyMsg = document.getElementById('detail-empty');
+        const content = document.getElementById('detail-content');
+        if (!drawer || !content) return;
 
-            // Visual feedback
-            div.style.opacity = '0.5';
-            div.style.pointerEvents = 'none';
+        emptyMsg.style.display = 'none';
+        content.style.display = 'block';
+        drawer.classList.add('active');
 
-            const btnIcon = div.querySelector('.btn-promote-studio-icon');
-            if (btnIcon) btnIcon.innerHTML = '<i class="loading-spinner"></i>';
+        content.innerHTML = `
+            <div class="view-header">
+                <h2>${item.title}</h2>
+            </div>
+            <div class="section-label">Summary Intelligence</div>
+            <p style="font-size:13px; line-height:1.6; opacity:0.8; margin-bottom:20px;">${item.summary || 'No summary available.'}</p>
+            
+            <div class="section-label">Actions</div>
+            <button class="btn-primary" id="btn-promote-studio-detail" style="width:100%; justify-content:center; margin-bottom:10px;">
+                <i data-lucide="zap"></i>
+                <span>Send to Studio</span>
+            </button>
+            <a href="${item.url}" target="_blank" class="btn-secondary" style="width:100%; justify-content:center; text-decoration:none;">
+                <i data-lucide="external-link"></i>
+                <span>View Original Source</span>
+            </a>
+        `;
 
+        content.querySelector('#btn-promote-studio-detail').onclick = async () => {
+            const btn = document.getElementById('btn-promote-studio-detail');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="loading-spinner"></i> Promoting...';
             try {
                 const res = await fetch(`/items/${item.id}/promote`, { method: 'POST' });
                 const data = await res.json();
                 if (data.cluster_id) {
                     window.preSelectedCluster = data.cluster_id;
-                    window.preSelectedItem = item.id;
                     navigate('studio');
                 }
             } catch (e) {
                 console.error('Promotion failed:', e);
-                div.style.opacity = '1';
-                div.style.pointerEvents = 'all';
-                if (btnIcon) btnIcon.innerHTML = '<i data-lucide="zap"></i>';
-                if (typeof lucide !== 'undefined') lucide.createIcons();
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="zap"></i> Send to Studio';
             }
         };
 
-        const btnPromoteIcon = div.querySelector('.btn-promote-studio-icon');
-        if (btnPromoteIcon) {
-            btnPromoteIcon.onclick = promoteItem;
-        }
-
-        div.onclick = (e) => {
-            if (e.target.closest('.btn-promote-studio-icon') || e.target.closest('.btn-icon-sm')) return;
-            promoteItem(e);
-        };
-
-        div.title = "Click to promote this topic to the Studio";
-
-
-        return div;
-    }
-
-    let currentReadingItem = null;
-
-    function openReadingPane(item) {
-        const pane = document.getElementById('reading-pane');
-        const content = document.getElementById('reading-pane-content');
-
-        // Toggle behavior: if clicking the SAME item, close it
-        if (currentReadingItem === item.id && pane.classList.contains('active')) {
-            closeReadingPane();
-            return;
-        }
-        currentReadingItem = item.id;
-
-        const typeLabel = item.source_type === 'news' ? 'News' : 'Reddit';
-
-        content.innerHTML = `
-            <div class="reading-pane-meta">
-                <span class="badge active">${typeLabel}</span>
-                <span>${item.source_name}</span>
-                <span>${item.country}</span>
-                <span>${new Date(item.timestamp).toLocaleDateString()}</span>
-            </div>
-            <h2>${item.title}</h2>
-            <div class="reading-pane-summary">
-                <p>${item.summary || 'No summary available.'}</p>
-                ${item.enrichment_status === 'generated' ? '<p class="info-alert" style="font-size: 0.8em; color: var(--clr-info);">Note: This summary was generated by AI due to source restrictions.</p>' : ''}
-            </div>
-            <div class="reading-pane-footer" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <a href="${item.url}" target="_blank" class="btn-secondary" style="text-decoration: none; font-size: 0.8em; padding: 10px 15px; background: rgba(255,255,255,0.05); border-radius: 8px; color: white;">
-                    <i data-lucide="external-link"></i> View Original
-                </a>
-                <button id="btn-promote-studio" class="btn-primary" style="font-size: 0.8em; padding: 10px 15px;">
-                    <i data-lucide="zap"></i> Send to Studio
-                </button>
-            </div>
-        `;
-
-        const btnPromote = document.getElementById('btn-promote-studio');
-        if (btnPromote) {
-            btnPromote.onclick = async () => {
-                btnPromote.disabled = true;
-                btnPromote.innerHTML = '<i class="loading-spinner"></i> Processing...';
-                try {
-                    const res = await fetch(`/items/${item.id}/promote`, { method: 'POST' });
-                    const data = await res.json();
-                    if (data.cluster_id) {
-                        window.preSelectedCluster = data.cluster_id;
-                        window.preSelectedItem = item.id;
-                        closeReadingPane();
-                        navigate('studio');
-                    }
-                } catch (e) {
-                    console.error('Promotion failed:', e);
-                    btnPromote.disabled = false;
-                    btnPromote.innerHTML = '<i data-lucide="zap"></i> Send to Studio';
-                }
-            };
-        }
-
-        pane.classList.add('active');
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
-
-    function closeReadingPane() {
-        document.getElementById('reading-pane').classList.remove('active');
-    }
-
-    const btnClosePane = document.getElementById('close-reading-pane');
-    if (btnClosePane) btnClosePane.onclick = closeReadingPane;
-
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeReadingPane();
-    });
 
     // Studio Logic
-    let selectedCluster = null;
-
     async function renderStudio() {
-        console.log('Rendering Studio...');
-        const btnGenerateCommentary = viewContainer.querySelector('#btn-generate-commentary');
-        const btnGeneratePackage = viewContainer.querySelector('#btn-generate-package');
-        const banner = viewContainer.querySelector('#active-topic-banner');
-        const topicNameDisplay = viewContainer.querySelector('#active-topic-name');
-        const referenceContainer = viewContainer.querySelector('#reference-article-source');
-        const referenceContent = viewContainer.querySelector('#reference-article-content');
+        const queueList = document.getElementById('queue-list');
+        if (!queueList) return;
 
-        if (!btnGenerateCommentary || !btnGeneratePackage || !banner) {
-            console.warn('Major Studio elements missing from active view. Skipping render logic.');
-            return;
-        }
-
-        // Handle pre-selection or existing selection
-        if (window.preSelectedCluster) {
-            selectedCluster = window.preSelectedCluster;
-            window.preSelectedCluster = null;
-        }
-
-        if (selectedCluster) {
-            btnGenerateCommentary.disabled = false;
-            btnGeneratePackage.disabled = false;
-            banner.style.display = 'flex';
-            topicNameDisplay.textContent = selectedCluster.toUpperCase();
-
-            // Handle specific item reference
-            if (window.preSelectedItem && referenceContainer && referenceContent) {
-                referenceContainer.style.display = 'block';
-                referenceContent.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>';
-                fetch(`/items/${window.preSelectedItem}`).then(res => res.json()).then(item => {
-                    if (item.error) {
-                        referenceContent.innerHTML = '<p class="error">Reference article not found.</p>';
-                        return;
-                    }
-                    referenceContent.innerHTML = `
-                        <h3 style="margin-bottom: 8px;">${item.title}</h3>
-                        <p style="font-size: 0.9em; opacity: 0.8; line-height: 1.4;">${item.summary}</p>
-                        <div style="margin-top: 10px; font-size: 0.8em; font-weight: bold; color: var(--clr-primary-500);">
-                            Source: ${item.source_name}
-                        </div>
+        try {
+            const res = await fetch('/items?used=true&limit=10');
+            const items = await res.json();
+            queueList.innerHTML = '';
+            if (items.length === 0) {
+                queueList.innerHTML = '<div class="placeholder-text">Queue is empty.</div>';
+            } else {
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'queue-card glass';
+                    div.style = "padding:10px; border-radius:8px; margin-bottom:10px; cursor:pointer;";
+                    div.innerHTML = `
+                        <div style="font-size:11px; font-weight:bold; color:var(--clr-primary-400); margin-bottom:20px;">${item.cluster_id}</div>
+                        <div style="font-size:12px; opacity:0.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
                     `;
-                }).catch(err => {
-                    console.error('Error fetching reference item:', err);
-                    referenceContent.innerHTML = '<p class="error">Failed to load reference metadata.</p>';
+                    div.onclick = () => loadTopicPackage(item.cluster_id);
+                    queueList.appendChild(div);
                 });
             }
-
-            // Auto-fetch if selected (only if not already generating)
-            fetchCommentary(selectedCluster);
-            fetchPackage(selectedCluster);
-        } else {
-            banner.style.display = 'none';
-            if (referenceContainer) referenceContainer.style.display = 'none';
+        } catch (e) {
+            console.error('Failed to load queue:', e);
         }
 
-        const tabs = viewContainer.querySelectorAll('.tab-btn');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const target = tab.dataset.tab;
-                viewContainer.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-                viewContainer.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                const targetView = viewContainer.querySelector(`#${target}-view`);
-                if (targetView) targetView.classList.add('active');
-            });
-        });
-
-        btnGenerateCommentary.onclick = async () => {
-            if (!selectedCluster) return;
-            btnGenerateCommentary.disabled = true;
-            btnGenerateCommentary.innerHTML = '<span><i class="dot pulse"></i> Generating...</span>';
-
-            const display = viewContainer.querySelector('#commentary-display');
-            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>'.repeat(3);
-
-            try {
-                const response = await fetch(`/topics/${selectedCluster}/generate_angles`, { method: 'POST' });
-                const data = await response.json();
-                btnGenerateCommentary.disabled = false;
-                btnGenerateCommentary.innerHTML = '<i data-lucide="sparkles"></i> <span>Refine Angles</span>';
-                if (data.angles) renderCommentary(data);
-                else alert('Error: ' + (data.error || 'Failed to generate commentary.'));
-            } catch (e) {
-                console.error('Error in Generate Commentary:', e);
-                btnGenerateCommentary.disabled = false;
-                btnGenerateCommentary.innerHTML = '<i data-lucide="sparkles"></i> <span>Refine Angles</span>';
-            }
-        };
-
-        btnGeneratePackage.onclick = async () => {
-            if (!selectedCluster) return;
-            btnGeneratePackage.disabled = true;
-            btnGeneratePackage.innerHTML = '<i data-lucide="loader"></i> <span>Generating Package...</span>';
-
-            const display = viewContainer.querySelector('#package-content-area');
-            if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(3);
-
-            try {
-                const response = await fetch(`/topics/${selectedCluster}/generate_full_package`, { method: 'POST' });
-                const data = await response.json();
-                btnGeneratePackage.disabled = false;
-                btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
-                if (data.primary_topic || data.cluster_id) renderPackage(data);
-                else alert('Error: ' + (data.error || 'Failed to generate package.'));
-            } catch (e) {
-                btnGeneratePackage.disabled = false;
-                btnGeneratePackage.innerHTML = '<i data-lucide="package"></i> <span>Generate Platform Package</span>';
-                console.error(e);
-            }
-        };
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (window.preSelectedCluster) {
+            loadTopicPackage(window.preSelectedCluster);
+            window.preSelectedCluster = null;
+        }
     }
 
-    async function fetchCommentary(cluster_id) {
-        const display = document.getElementById('commentary-display');
-        display.innerHTML = '<div class="loading-shimmer" style="height: 100px;"></div>'.repeat(3);
+    async function loadTopicPackage(clusterId) {
+        if (!clusterId) return;
+        const studioEmpty = document.getElementById('studio-empty');
+        const cockpitContainer = document.getElementById('platform-rows-container');
+        if (studioEmpty) studioEmpty.style.display = 'none';
+        if (cockpitContainer) {
+            cockpitContainer.style.display = 'block';
+            cockpitContainer.innerHTML = '<div class="loading-shimmer"></div>';
+        }
+
         try {
-            const response = await fetch(`/topics/${cluster_id}/angles`);
-            const data = await response.json();
-            if (data && data.angles) renderCommentary(data);
-            else display.innerHTML = '<p class="placeholder-text">No commentary generated yet. Click "Refine Angles" to start.</p>';
-        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Refine Angles" to start.</p>'; }
-    }
+            let pkgRes = await fetch(`/topics/${clusterId}/package`);
+            let pkg = await pkgRes.json();
 
-    async function fetchPackage(cluster_id) {
-        const display = document.getElementById('package-content-area');
-        if (display) display.innerHTML = '<div class="loading-shimmer" style="height: 150px;"></div>'.repeat(3);
+            if (pkg.error) {
+                renderCockpitHeader(clusterId, null);
+                cockpitContainer.innerHTML = `
+                    <div style="text-align:center; padding: 40px;">
+                        <p style="opacity:0.6; margin-bottom:20px;">No package generated yet.</p>
+                        <button class="btn-primary" onclick="generateFullPackage('${clusterId}')">Generate Package</button>
+                    </div>
+                `;
+            } else {
+                renderCockpitHeader(clusterId, pkg);
+                renderPlatformRows(pkg);
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        } catch (e) {
+            console.error('Load package failed:', e);
+        }
+    }
+    window.loadTopicPackage = loadTopicPackage;
+
+    async function generateFullPackage(clusterId) {
+        if (!clusterId) return;
+        const cockpitContainer = document.getElementById('platform-rows-container');
+        if (cockpitContainer) cockpitContainer.innerHTML = '<div class="loading-shimmer"></div>';
+
         try {
-            const response = await fetch(`/topics/${cluster_id}/package`);
-            const data = await response.json();
-            if (data && (data.primary_topic || data.cluster_id)) renderPackage(data);
-            else display.innerHTML = '<p class="placeholder-text">No package generated. Click "Generate Platform Package" to start.</p>';
-        } catch (e) { display.innerHTML = '<p class="placeholder-text">Click "Generate Platform Package" to start.</p>'; }
+            await fetch(`/topics/${clusterId}/generate_full_package`, { method: 'POST' });
+            loadTopicPackage(clusterId);
+        } catch (e) {
+            console.error('Generation Error:', e);
+            alert('An error occurred during generation.');
+        }
     }
+    window.generateFullPackage = generateFullPackage;
 
-    function renderCommentary(data) {
-        const display = document.getElementById('commentary-display');
-        if (!display) return;
-
-        const anglesHtml = data.angles.map(angle => `
-            <div class="angle-card" style="margin-bottom: 12px; padding: 12px; border-left: 4px solid var(--clr-primary-500); background: rgba(255,255,255,0.03);">
-                <div class="angle-type" style="color: var(--clr-primary-500); font-weight: bold; font-size: 0.8em; margin-bottom: 4px;">${angle.type}</div>
-                <div class="angle-content" style="font-size: 0.9em;">${angle.content}</div>
-            </div>
-        `).join('');
-
-        display.innerHTML = `
-            ${anglesHtml}
-            <div class="facebook-card" style="margin-top: 16px; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--clr-primary-500); border-radius: 8px;">
-                <div class="facebook-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: bold; color: #60a5fa;">
-                    <i data-lucide="facebook"></i>
-                    <span>Strongest Angle (Facebook Ready)</span>
+    function renderCockpitHeader(clusterId, pkg) {
+        const container = document.getElementById('studio-header-container');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="view-header">
+                <div>
+                    <h1>Publishing Cockpit <span class="score-badge cluster">${clusterId}</span></h1>
+                    <p style="font-size:12px; opacity:0.6;">Distributing content across platforms.</p>
                 </div>
-                <div class="facebook-content" style="white-space: pre-wrap; font-size: 0.95em;">${data.strongest_angle_html || 'No preview available.'}</div>
+                <button class="btn-secondary" onclick="generateFullPackage('${clusterId}')">Regenerate All</button>
             </div>
+            ${pkg ? `<div class="glass" style="padding:15px; border-radius:12px; margin-bottom:20px; border-left:4px solid var(--clr-primary-500);">
+                <div class="section-label">Core Thesis</div>
+                <p style="font-size:13px; color:var(--clr-neutral-200);">${pkg.core_thesis}</p>
+            </div>` : ''}
         `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    let currentPackageData = null;
+    function renderPlatformRows(pkg) {
+        const container = document.getElementById('platform-rows-container');
+        if (!container) return;
+        container.innerHTML = '';
 
-    function renderPackage(data) {
-        currentPackageData = data;
-        const display = document.getElementById('package-display');
-        const contentArea = document.getElementById('package-content-area');
-        if (!display || !contentArea) return;
+        const platforms = [
+            { id: 'facebook', name: 'Facebook Page', icon: 'facebook' },
+            { id: 'instagram', name: 'Instagram Reels', icon: 'instagram' },
+            { id: 'twitter', name: 'X (Twitter)', icon: 'twitter' }
+        ];
 
-        // Initialize sub-tabs
-        const subTabs = display.querySelectorAll('.sub-tab-btn');
-        subTabs.forEach(tab => {
-            tab.onclick = () => {
-                subTabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                renderSubTab(tab.dataset.subtab);
-            };
+        platforms.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'platform-row';
+            const res = ValidationRules[p.id](pkg);
+            const statusClass = res.errors.length > 0 ? 'blocked' : (res.warnings.length > 0 ? 'warning' : 'ready');
+
+            div.innerHTML = `
+                <div class="platform-row-header">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="readiness-badge ${statusClass}"></div>
+                        <i data-lucide="${p.icon}"></i>
+                        <strong>${p.name}</strong>
+                    </div>
+                    <button class="btn-primitive" onclick="generateFullPackage('${pkg.cluster_id}')"><i data-lucide="refresh-cw"></i></button>
+                </div>
+                <div class="platform-row-content">
+                    <div class="validation-banner-container">${UI.validationBanner(res)}</div>
+                    <div class="composer-grid"></div>
+                </div>
+            `;
+            const grid = div.querySelector('.composer-grid');
+            if (p.id === 'facebook') {
+                grid.appendChild(UI.inlineEditor('fb-body', 'Post Body', pkg.facebook_post_body, (v) => { pkg.facebook_post_body = v; updateReadiness(pkg); }));
+            } else if (p.id === 'instagram') {
+                grid.appendChild(UI.inlineEditor('ig-caption', 'Caption', pkg.ig_caption, (v) => { pkg.ig_caption = v; updateReadiness(pkg); }));
+            } else if (p.id === 'twitter') {
+                grid.appendChild(UI.inlineEditor('x-body', 'Primary Post', pkg.x_primary_post, (v) => { pkg.x_primary_post = v; updateReadiness(pkg); }));
+            }
+            container.appendChild(div);
         });
 
-        // Initial render
-        renderSubTab('canonical');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        updateReadiness(pkg);
     }
 
-    function renderSubTab(tabName) {
-        const area = document.getElementById('package-content-area');
-        if (!area || !currentPackageData) return;
-        const data = currentPackageData;
+    function updateReadiness(pkg) {
+        const readinessPanel = document.getElementById('readiness-panel');
+        const btnMarkReady = document.getElementById('btn-mark-ready');
+        if (!readinessPanel) return;
 
-        let html = '';
-        switch (tabName) {
-            case 'canonical':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="info"></i> Canonical Source Outputs</div>
-                        <div class="headline-item" style="background: rgba(16, 185, 129, 0.1); color: var(--clr-success);">Primary: ${data.primary_topic || 'Not set'}</div>
-                        <div class="headline-item">Secondary: ${data.secondary_topic || 'Not set'}</div>
-                        <div class="cta-box" style="margin-top: 12px; border-style: solid;">
-                            <strong>Core Thesis:</strong><br>${data.core_thesis || 'Not set'}
-                        </div>
-                        <div class="facebook-card" style="margin-top: 12px; border-color: rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
-                            <div class="section-label">Editorial Angle</div>
-                            <div style="font-size: 0.9em; opacity: 0.9;">${data.editorial_angle || 'Not set'}</div>
-                        </div>
-                    </div>
-                `;
-                break;
-            case 'facebook':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="facebook"></i> Facebook Page Package</div>
-                        <div class="article-body" style="margin-bottom: 20px;">${(data.facebook_post_body || '').replace(/\n/g, '<br>')}</div>
-                        
-                        <div class="section-label">Distribution Safe Version</div>
-                        <div class="article-body" style="font-size: 0.9em; opacity: 0.8; margin-bottom: 20px; border-left: 3px solid var(--clr-success); padding-left: 12px;">
-                            ${(data.facebook_distribution_safe_version || 'No safe version generated').replace(/\n/g, '<br>')}
-                        </div>
+        const validation = validatePackage(pkg);
+        readinessPanel.innerHTML = '';
 
-                        <div class="section-label">Headlines (Scroll-Stopping)</div>
-                        ${(data.facebook_headlines || []).map(h => `<div class="headline-item">${h}</div>`).join('')}
-                        
-                        <div class="section-label" style="margin-top: 16px;">Call to Action</div>
-                        <div class="cta-box">${data.facebook_cta || 'No CTA generated'}</div>
-                        
-                        <div class="section-label" style="margin-top: 16px;">Pinned Comment</div>
-                        <div class="beat-card" style="padding: 12px; border: 1px solid var(--clr-primary-500);">${data.facebook_pinned_comment || ''}</div>
+        Object.entries(validation.report).forEach(([p, res]) => {
+            const statusClass = res.errors.length > 0 ? 'error' : (res.warnings.length > 0 ? 'warning' : 'active');
+            const div = document.createElement('div');
+            div.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:11px;";
+            div.innerHTML = `
+                <span style="text-transform:capitalize;">${p}</span>
+                <span class="status-chip ${statusClass}">${res.errors.length > 0 ? 'Fail' : 'Pass'}</span>
+            `;
+            readinessPanel.appendChild(div);
+        });
 
-                        ${data.facebook_metadata ? `
-                        <div class="metadata-grid" style="margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.8em; opacity: 0.7;">
-                            <div><strong>Intent:</strong> ${data.facebook_metadata.post_intent}</div>
-                            <div><strong>Time:</strong> ${data.facebook_metadata.recommended_post_time}</div>
-                        </div>` : ''}
-                    </div>
-
-                    <div class="view-section" style="margin-top: 12px;">
-                        <div class="section-label"><i data-lucide="users"></i> Facebook Groups (Conversational)</div>
-                        <div class="cta-box" style="background: rgba(255,255,255,0.03); border-color: var(--clr-primary-400); color: white;">
-                             ${(data.facebook_group_post_body || '').replace(/\n/g, '<br>')}
-                        </div>
-                        <div style="margin-top: 12px;">
-                            <strong>Discussion Prompt:</strong><br>${data.facebook_group_discussion_prompt || 'None'}
-                        </div>
-                        <div style="margin-top: 10px; font-size: 0.85em; background: rgba(255,165,0,0.1); padding: 8px; border-radius: 4px;">
-                            <strong>Safety Notes:</strong> ${data.facebook_group_safety_notes || 'No specific guidance.'}
-                        </div>
-                        ${data.facebook_group_metadata ? `
-                        <div class="metadata-grid" style="margin-top: 10px; display: flex; gap: 15px; font-size: 0.75em; opacity: 0.6;">
-                            <span><strong>Safe Score:</strong> ${data.facebook_group_metadata.group_safe_score}</span>
-                            <span><strong>Delay:</strong> ${data.facebook_group_metadata.recommended_delay}</span>
-                        </div>` : ''}
-                    </div>
-                `;
-                break;
-            case 'instagram':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="instagram"></i> Instagram Reels Package</div>
-                        <div class="section-label">On-Screen Text Clusters</div>
-                        <div class="beats-grid" style="margin-bottom: 16px;">
-                            ${(data.ig_on_screen_text || []).map((text, i) => `<div class="beat-card"><div class="beat-number">C${i + 1}</div>${text}</div>`).join('')}
-                        </div>
-
-                        <div class="section-label">Full Reel Script</div>
-                        <div class="beats-grid">
-                            ${(data.ig_reel_script || []).map(b => `<div class="beat-card"><div class="beat-number">${b.beat}</div>${b.text}</div>`).join('')}
-                        </div>
-
-                        <div class="section-label" style="margin-top: 16px;">Caption & Hashtags</div>
-                        <div class="article-body" style="font-size: 0.9em; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                            ${(data.ig_caption || '').replace(/\n/g, '<br>')}
-                            <div style="margin-top: 8px; color: var(--clr-primary-400);">${(data.ig_hashtags || []).join(' ')}</div>
-                        </div>
-
-                        <div class="section-label" style="margin-top: 16px;">Engagement</div>
-                        <div class="beat-card" style="border-left: 4px solid #e4405f;">
-                            <strong>Seed Question:</strong> ${data.ig_seed_comment || 'None'}
-                        </div>
-
-                        ${data.ig_metadata ? `
-                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
-                            <strong>Audio:</strong> ${data.ig_metadata.audio_guidance} | <strong>Post:</strong> ${data.ig_metadata.recommended_post_time}
-                        </div>` : ''}
-                    </div>
-                `;
-                break;
-            case 'youtube':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="youtube"></i> YouTube Shorts Package</div>
-                        <div class="headline-item" style="margin-bottom: 12px; background: #ff000010; border: 1px solid #ff000030;">${data.yt_title || 'No title'}</div>
-                        <div class="section-label">Timestamped Script (20-40s)</div>
-                        <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9em; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">${data.yt_shorts_script || ''}</pre>
-                        
-                        <div class="section-label" style="margin-top: 16px;">Description</div>
-                        <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 12px;">${data.yt_description || ''}</div>
-
-                        <div class="section-label">Engagement</div>
-                        <div class="beat-card" style="border-left: 4px solid #ff0000;"><strong>Pinned Question:</strong> ${data.yt_pinned_comment || ''}</div>
-                        
-                        ${data.yt_metadata ? `
-                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
-                            <strong>Hook Check:</strong> ${data.yt_metadata.retention_hook_used ? '✅ Hooked' : '❌ Missing'} | <strong>Post:</strong> ${data.yt_metadata.recommended_post_time}
-                        </div>` : ''}
-                    </div>
-                `;
-                break;
-            case 'x':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="twitter"></i> X (Twitter) Package</div>
-                        <div class="cta-box" style="background: #000; border-color: #1da1f2; color: #fff; font-size: 1.1em; margin-bottom: 20px;">
-                            ${data.x_primary_post || ''}
-                        </div>
-
-                        ${(data.x_thread_replies || []).length > 0 ? `
-                        <div class="section-label">Thread Replies</div>
-                        ${(data.x_thread_replies || []).map((p, i) => `
-                            <div class="beat-card" style="margin-bottom: 8px;">
-                                <div class="beat-number">Reply ${i + 1}</div>
-                                ${p}
-                            </div>
-                        `).join('')}` : ''}
-
-                        <div class="section-label" style="margin-top: 16px;">Engagement Question</div>
-                        <div class="cta-box" style="padding: 10px; border-style: dotted;">${data.x_engagement_question || 'None'}</div>
-
-                        ${data.x_metadata ? `
-                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
-                            <strong>Type:</strong> ${data.x_metadata.post_type} | <strong>Post:</strong> ${data.x_metadata.recommended_post_time}
-                        </div>` : ''}
-                    </div>
-                `;
-                break;
-            case 'carousel':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="layers"></i> Carousel / Slide Package</div>
-                        <div class="beats-grid" style="grid-template-columns: repeat(2, 1fr);">
-                            ${(data.carousel_slides || []).map(s => `
-                                <div class="beat-card" style="border: 1px solid rgba(255,255,255,0.05); min-height: 100px;">
-                                    <div class="beat-number">Slide ${s.slide || s.slide_number}</div>
-                                    <div style="font-weight: bold; margin-bottom: 4px;">${s.text}</div>
-                                    <div style="font-size: 0.75em; opacity: 0.6; margin-top: 8px;">
-                                        <strong>Visual:</strong> ${s.visual_direction || 'None'}<br>
-                                        <strong>Style:</strong> ${s.text_style || 'Default'}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div class="section-label" style="margin-top: 16px;">Carousel Caption</div>
-                        <div class="article-body" style="font-size: 0.9em;">${data.carousel_caption || ''}</div>
-                    </div>
-                `;
-                break;
-            case 'engagement':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="message-circle"></i> Comment Seeding & Engagement Strategy</div>
-                        <div class="beat-card" style="background: rgba(16, 185, 129, 0.05); border: 1px solid var(--clr-success);">
-                            <strong>Pin Recommendation:</strong> ${data.seeding_pin_recommendation || ''}
-                        </div>
-                        <div style="margin-top: 8px; font-size: 0.8em; opacity: 0.7;">
-                            <strong>Follow-up Timing:</strong> ${data.seeding_follow_up_timing || 'Not set'}
-                        </div>
-
-                        <div class="section-label" style="margin-top: 16px;">Platform Specific Seeds</div>
-                        <div class="beats-grid">
-                            <div class="beat-card">
-                                <div class="beat-number">YouTube</div>
-                                <ul style="padding-left: 14px; font-size: 0.85em;">${(data.seeding_yt_comments || []).map(li => `<li>${li}</li>`).join('')}</ul>
-                            </div>
-                            <div class="beat-card">
-                                <div class="beat-number">Instagram</div>
-                                <ul style="padding-left: 14px; font-size: 0.85em;">${(data.seeding_ig_comments || []).map(li => `<li>${li}</li>`).join('')}</ul>
-                            </div>
-                        </div>
-
-                        <div class="section-label" style="margin-top: 16px;">Creator Reply Templates</div>
-                        <div class="beats-grid" style="grid-template-columns: repeat(3, 1fr);">
-                            ${Object.entries(data.seeding_creator_reply_templates || {}).map(([type, tpl]) => `
-                                <div class="beat-card">
-                                    <div class="beat-number" style="text-transform: capitalize;">${type}</div>
-                                    <div style="font-size: 0.85em;">${tpl}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-                break;
-            case 'scheduling':
-                html = `
-                    <div class="view-section">
-                        <div class="section-label"><i data-lucide="calendar"></i> Deployment & Scheduling Plan</div>
-                        <div class="cta-box" style="border-style: solid; background: rgba(59, 130, 246, 0.05);">
-                            <strong>Ideal Window:</strong> ${data.posting_reason || ''}
-                        </div>
-                        <div class="section-label" style="margin-top: 16px;">Staggered Platform Launch</div>
-                        <div class="beats-grid">
-                            ${Object.entries(data.recommended_post_times || {}).map(([p, t]) => `
-                                <div class="beat-card">
-                                    <div class="beat-number">${p}</div>
-                                    <div style="font-weight: bold;">${new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                    <div style="font-size: 0.7em; opacity: 0.5;">${new Date(t).toLocaleDateString()}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
-                            <span class="badge active">Queue Position: ${data.today_queue_position || '1'}</span>
-                            <span class="badge" style="background: rgba(255,255,255,0.1);">Next Action: ${data.next_action || 'wait'}</span>
-                        </div>
-                    </div>
-                `;
-                break;
+        if (btnMarkReady) {
+            btnMarkReady.disabled = validation.overallBlocked;
+            btnMarkReady.classList.toggle('btn-primary', !validation.overallBlocked);
+            btnMarkReady.classList.toggle('btn-secondary', validation.overallBlocked);
         }
-
-        area.innerHTML = html;
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     async function renderAdmin() {
         try {
-            const itemsRes = await fetch('/items?limit=1');
-            const totalItems = itemsRes.headers.get('X-Total-Count') || '930+'; // Simple fallback or mock
-            document.getElementById('stat-total-items').textContent = totalItems;
-
-            const sourcesRes = await fetch('/sources');
-            const sources = await sourcesRes.json();
-            const sourceListUi = document.getElementById('source-list-ui');
-
-            sourceListUi.innerHTML = sources.map(s => `
-                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span>${s.name} <small style="opacity: 0.5;">(${s.country})</small></span>
-                    <span class="badge ${s.is_active ? 'active' : ''}">${s.is_active ? 'Active' : 'Inactive'}</span>
-                </li>
-            `).join('');
+            const res = await fetch('/sources');
+            const sources = await res.json();
+            const list = document.getElementById('source-list-ui');
+            if (list) {
+                list.innerHTML = sources.map(s => `
+                    <li style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <span>${s.name}</span>
+                        <span class="badge ${s.is_active ? 'active' : ''}">${s.is_active ? 'Active' : 'Inactive'}</span>
+                    </li>
+                `).join('');
+            }
         } catch (e) {
-            console.error('Admin render failed:', e);
+            console.error('Admin load failed:', e);
         }
     }
 
-    navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            navigate(item.dataset.view);
-        });
-    });
-
+    // Global Listeners
     document.addEventListener('click', (e) => {
         if (e.target.classList.contains('pill')) {
-            const pills = document.querySelectorAll('.pill');
-            pills.forEach(p => p.classList.remove('active'));
+            const group = e.target.parentElement;
+            group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
             e.target.classList.add('active');
-            renderDashboard(e.target.dataset.filter);
+            renderDashboard();
         }
     });
 
-    globalSearch.addEventListener('input', debounce((e) => {
-        if (document.querySelector('.nav-item[data-view="dashboard"]').classList.contains('active')) {
-            renderDashboard('all', e.target.value);
-        }
-    }, 500));
-
-    function debounce(func, timeout = 300) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    navItems.forEach(item => {
+        item.onclick = (e) => {
+            e.preventDefault();
+            navigate(item.dataset.view);
         };
-    }
+    });
 
     navigate('dashboard');
 });

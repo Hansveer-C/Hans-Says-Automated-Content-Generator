@@ -75,93 +75,110 @@
 
     <!-- Templates -->
     <template id="dashboard-template">
-        <div class="view-header">
-            <div class="header-main">
-                <h1>Streams</h1>
-                <button class="btn-secondary" id="btn-add-stream">
-                    <i data-lucide="plus"></i>
-                    <span>Add Stream</span>
-                </button>
-            </div>
-            <div class="filter-pills" id="filter-pills">
-                <button class="pill active" data-filter="all">All Channels</button>
-                <button class="pill" data-filter="immigration">Immigration</button>
-                <button class="pill" data-filter="elections">Elections</button>
-                <button class="pill" data-filter="economy">Economy</button>
-            </div>
-        </div>
-        <div class="streams-container" id="feed-grid">
-            <!-- Columns (Streams) injected here -->
-            <div class="loading-shimmer"></div>
+        <div class="dashboard-layout">
+            <!-- Left: Filter Sidebar -->
+            <aside class="filter-sidebar" id="filter-sidebar">
+                <div class="section-label">Source Filters</div>
+                <div id="filter-source-types" class="filter-group">
+                    <button class="pill active" data-source="all">All</button>
+                    <button class="pill" data-source="news">News</button>
+                    <button class="pill" data-source="reddit">Reddit</button>
+                </div>
+
+                <div class="section-label">Suitability Heuristics</div>
+                <div id="filter-signals" class="filter-group">
+                    <button class="pill" data-signal="fb"><i data-lucide="facebook"></i>FB</button>
+                    <button class="pill" data-signal="ig"><i data-lucide="instagram"></i>IG</button>
+                    <button class="pill" data-signal="yt"><i data-lucide="youtube"></i>YT</button>
+                    <button class="pill" data-signal="x"><i data-lucide="twitter"></i>X</button>
+                </div>
+
+                <div class="section-label">Score Thresholds</div>
+                <div class="filter-group">
+                    <label class="field-label">Min Final Score</label>
+                    <input type="range" id="filter-min-score" min="0" max="100" value="0">
+                </div>
+
+                <div class="section-label">Usage</div>
+                <div class="filter-group">
+                    <button class="pill active" data-used="all">All Items</button>
+                    <button class="pill" data-used="unused">Unused Only</button>
+                </div>
+            </aside>
+
+            <!-- Center: Main Feed -->
+            <section class="main-feed">
+                <div class="view-header">
+                    <div class="header-main">
+                        <h1>Intelligence Feed</h1>
+                        <div class="search-container glass" style="max-width:300px;">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="feed-search" placeholder="Search feed...">
+                        </div>
+                    </div>
+                </div>
+                <div class="feed-container" id="feed-grid">
+                    <div class="loading-shimmer"></div>
+                </div>
+            </section>
+
+            <!-- Right: Detail Drawer -->
+            <aside class="detail-drawer" id="detail-drawer">
+                <div id="detail-empty" class="placeholder-text">Select an item to view details</div>
+                <div id="detail-content" style="display:none;">
+                    <!-- Detail content injected here -->
+                </div>
+            </aside>
         </div>
     </template>
 
     <template id="studio-template">
-        <div class="view-header">
-            <div class="header-main">
-                <h1>Content Refinement Studio</h1>
-                <div id="active-topic-banner" class="active-topic-banner glass" style="display: none;">
-                    <i data-lucide="zap"></i>
-                    <span>Refining: </span><strong id="active-topic-name"></strong>
+        <div class="dashboard-layout">
+            <!-- Left: Today Queue -->
+            <aside class="filter-sidebar" id="queue-sidebar">
+                <div class="section-label">Today's Queue</div>
+                <div id="queue-list" class="queue-container">
+                    <div class="placeholder-text">No items in queue.</div>
                 </div>
-            </div>
-        </div>
-        <div class="studio-layout">
-            <div id="reference-article-source" class="reference-article glass" style="display: none;">
-                <div class="section-label"><i data-lucide="file-text"></i> Source Material</div>
-                <div id="reference-article-content"></div>
-            </div>
-            <div class="generation-panel glass">
-                <div class="panel-tabs">
-                    <button class="tab-btn active" data-tab="angles">1. Commentary Angles</button>
-                    <button class="tab-btn" data-tab="package">2. Platform Package</button>
+            </aside>
+
+            <!-- Center: Publishing Cockpit -->
+            <section class="main-feed">
+                <div id="studio-header-container">
+                    <!-- PublishingCockpitHeader injected here -->
                 </div>
 
-                <div id="angles-view" class="tab-content active">
-                    <div id="commentary-display" class="commentary-display">
-                        <p class="placeholder-text">First, promote a topic from the <strong>Dashboard</strong> hub.</p>
+                <div id="studio-cockpit-content" class="studio-cockpit">
+                    <div id="studio-empty" class="placeholder-text"
+                        style="height: 400px; display: flex; align-items: center; justify-content: center;">
+                        <div style="text-align: center;">
+                            <i data-lucide="zap"
+                                style="width: 48px; height: 48px; opacity: 0.2; margin-bottom: 20px;"></i>
+                            <p>Select a topic from the Feed to begin production.</p>
+                        </div>
                     </div>
-                    <div class="actions">
-                        <button class="btn-primary" id="btn-generate-commentary" disabled>
-                            <i data-lucide="sparkles"></i>
-                            <span>Refine Angles</span>
-                        </button>
+                    <div id="platform-rows-container" style="display:none;">
+                        <!-- Platform Rows (FB, IG, YT, X, etc.) injected here -->
                     </div>
                 </div>
+            </section>
 
-                <div id="package-view" class="tab-content">
-                    <div id="package-display" class="package-display">
-                        <div class="package-sub-tabs">
-                            <button class="sub-tab-btn active" data-subtab="canonical"><i
-                                    data-lucide="file-text"></i>Canonical</button>
-                            <button class="sub-tab-btn" data-subtab="facebook"><i
-                                    data-lucide="facebook"></i>Facebook</button>
-                            <button class="sub-tab-btn" data-subtab="instagram"><i
-                                    data-lucide="instagram"></i>Instagram</button>
-                            <button class="sub-tab-btn" data-subtab="youtube"><i
-                                    data-lucide="youtube"></i>YouTube</button>
-                            <button class="sub-tab-btn" data-subtab="x"><i data-lucide="twitter"></i>X
-                                (Twitter)</button>
-                            <button class="sub-tab-btn" data-subtab="carousel"><i
-                                    data-lucide="layers"></i>Carousel</button>
-                            <button class="sub-tab-btn" data-subtab="engagement"><i
-                                    data-lucide="message-circle"></i>Engagement</button>
-                            <button class="sub-tab-btn" data-subtab="scheduling"><i
-                                    data-lucide="calendar"></i>Deployment</button>
-                        </div>
-                        <div id="package-content-area" class="package-content-area">
-                            <p class="placeholder-text">Refine your angles first, then generate the full platform
-                                package.</p>
-                        </div>
-                    </div>
-                    <div class="actions">
-                        <button class="btn-primary" id="btn-generate-package" disabled>
-                            <i data-lucide="package"></i>
-                            <span>Generate Platform Package</span>
-                        </button>
-                    </div>
+            <!-- Right: Publish Readiness -->
+            <aside class="detail-drawer" id="readiness-drawer">
+                <div class="section-label">Publish Readiness</div>
+                <div id="readiness-panel">
+                    <!-- Readiness status per platform injected here -->
                 </div>
-            </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn-primary" id="btn-mark-ready" disabled style="width: 100%;">
+                        <i data-lucide="check-circle"></i>
+                        <span>Mark Ready to Publish</span>
+                    </button>
+                    <p style="font-size: 10px; opacity: 0.6; margin-top: 10px; text-align: center;">
+                        Unlock once all hard gates pass.
+                    </p>
+                </div>
+            </aside>
         </div>
     </template>
 
@@ -242,7 +259,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=2"></script>
     <script>
         lucide.createIcons();
     </script>
