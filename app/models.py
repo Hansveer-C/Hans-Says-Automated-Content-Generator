@@ -60,6 +60,7 @@ class TopicCommentary(Base):
 class TopicPackage(Base):
     """
     Stores the full 'Final Output Package' for a selected topic cluster.
+    Each platform has an explicit set of fields representing its output contract.
     """
     __tablename__ = "topic_packages"
 
@@ -71,56 +72,58 @@ class TopicPackage(Base):
     primary_topic = Column(String)
     secondary_topic = Column(String)
     core_thesis = Column(Text)
-    editorial_angle = Column(String)
+    editorial_angle = Column(Text)
     
-    # 2. Facebook Page Package
-    facebook_article = Column(Text) # 300-400 words
-    facebook_headlines = Column(JSON) # 3 options
+    # 2. Facebook Page (facebook_page_post)
+    facebook_post_body = Column(Text) # 300-400 words
+    facebook_headlines = Column(JSON) # Array of 3
     facebook_cta = Column(String)
     facebook_pinned_comment = Column(Text)
+    facebook_distribution_safe_version = Column(Text)
+    facebook_metadata = Column(JSON) # recommended_post_time, timezone, post_intent, status
     
-    # 3. Facebook Groups Package
-    facebook_group_post = Column(Text) # conversational/question-forward
-    facebook_group_pinned_comment = Column(Text)
-    group_posting_guidance = Column(Text)
+    # 3. Facebook Groups (facebook_group_post)
+    facebook_group_post_body = Column(Text) # 150-250 words
+    facebook_group_discussion_prompt = Column(Text)
+    facebook_group_safety_notes = Column(Text)
+    facebook_group_metadata = Column(JSON) # group_safe_score, recommended_delay, status
     
-    # 4. Instagram Reels Package
-    ig_reel_script = Column(JSON) # on-screen text beats
+    # 4. Instagram Reels (instagram_reel)
+    ig_reel_script = Column(JSON) # timestamped visual beats
+    ig_on_screen_text = Column(JSON) # Array of slide/beat text
     ig_caption = Column(Text)
-    ig_hashtags = Column(JSON) # 3-7 tags
-    ig_seed_comments = Column(JSON) # 3
-    ig_pin_comment = Column(Text)
+    ig_seed_comment = Column(Text)
+    ig_hashtags = Column(JSON) # preserved from before
+    ig_metadata = Column(JSON) # audio_guidance, recommended_post_time, status
     
-    # 5. YouTube Shorts Package
-    yt_shorts_script = Column(Text) # timestamped
+    # 5. YouTube Shorts (youtube_short)
+    yt_shorts_script = Column(Text) # timestamped beats
     yt_title = Column(String)
     yt_description = Column(Text)
     yt_pinned_comment = Column(Text)
-    yt_seed_comments = Column(JSON) # 3
+    yt_metadata = Column(JSON) # retention_hook_used, recommended_post_time, status
     
-    # 6. X (Twitter) Package
+    # 6. X Twitter (x_post)
     x_primary_post = Column(String) # <= 280 chars
-    x_thread_replies = Column(JSON) # 2-4 optional
-    x_hashtags = Column(JSON) # 0-2 max
+    x_thread_replies = Column(JSON) # 2-4
+    x_engagement_question = Column(String)
+    x_metadata = Column(JSON) # post_type, recommended_post_time, status
     
-    # 7. Carousel / Slide Video Package
-    carousel_slides = Column(JSON) # 6-8 slides, visual info
+    # 7. Comment Seeding (comment_seeding_pack)
+    seeding_yt_comments = Column(JSON) # 3
+    seeding_ig_comments = Column(JSON) # 3
+    seeding_pin_recommendation = Column(Text)
+    seeding_follow_up_timing = Column(String)
+    seeding_creator_reply_templates = Column(JSON) # Agree, Neutral, Calm disagreement
+    
+    # 8. Carousel (carousel_asset)
+    carousel_slides = Column(JSON) # 6-8 slides with text, visual_direction, text_style
     carousel_caption = Column(Text)
+    carousel_metadata = Column(JSON)
     
-    # 8. Comment Seeding & Engagement Pack
-    pinned_comment_strategy = Column(Text)
-    seed_comments_per_platform = Column(JSON)
-    creator_reply_templates = Column(JSON) # Agree, Neutral, Calm disagreement
-    
-    # 9. Scheduling & Deployment Plan
-    recommended_post_times = Column(JSON) # Per platform
-    platform_posting_order = Column(JSON) # Platform list
-    staggered_timing_offsets = Column(JSON)
-    posting_reason = Column(Text)
-    next_action = Column(String, default="wait") # post now / wait / scheduled
-    today_queue_position = Column(Integer)
-    
-    # 10. Operator Control Outputs
+    # 9. Operator & Queue Management (inherited)
     status_flags = Column(JSON, default={"generated": True, "copied": False, "scheduled": False, "posted": False})
     posted_at = Column(DateTime, nullable=True)
     notes = Column(Text)
+    today_queue_position = Column(Integer)
+    next_action = Column(String, default="wait")

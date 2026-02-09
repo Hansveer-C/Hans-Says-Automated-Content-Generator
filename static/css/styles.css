@@ -918,12 +918,57 @@ nav {
     border-bottom-color: var(--clr-primary-500);
 }
 
-.tab-content {
-    display: none;
-}
-
 .tab-content.active {
     display: block;
+}
+
+/* Studio Package Sub-Tabs */
+.package-sub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-4);
+    background: rgba(255, 255, 255, 0.03);
+    padding: var(--sp-2);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+}
+
+.sub-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+    transition: var(--tr-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.sub-tab-btn i {
+    width: 14px;
+    height: 14px;
+    opacity: 0.7;
+}
+
+.sub-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.sub-tab-btn.active {
+    background: var(--clr-primary-500);
+    color: white;
+    border-color: var(--clr-primary-500);
+    box-shadow: 0 2px 8px rgba(0, 200, 83, 0.3);
+}
+
+.sub-tab-btn.active i {
+    opacity: 1;
 }
 
 /* Package Display */

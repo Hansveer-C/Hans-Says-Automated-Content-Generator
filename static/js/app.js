@@ -563,22 +563,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <div class="view-section">
                         <div class="section-label"><i data-lucide="facebook"></i> Facebook Page Package</div>
-                        <div class="article-body" style="margin-bottom: 20px;">${(data.facebook_article || '').replace(/\n/g, '<br>')}</div>
+                        <div class="article-body" style="margin-bottom: 20px;">${(data.facebook_post_body || '').replace(/\n/g, '<br>')}</div>
+                        
+                        <div class="section-label">Distribution Safe Version</div>
+                        <div class="article-body" style="font-size: 0.9em; opacity: 0.8; margin-bottom: 20px; border-left: 3px solid var(--clr-success); padding-left: 12px;">
+                            ${(data.facebook_distribution_safe_version || 'No safe version generated').replace(/\n/g, '<br>')}
+                        </div>
+
                         <div class="section-label">Headlines (Scroll-Stopping)</div>
                         ${(data.facebook_headlines || []).map(h => `<div class="headline-item">${h}</div>`).join('')}
+                        
                         <div class="section-label" style="margin-top: 16px;">Call to Action</div>
                         <div class="cta-box">${data.facebook_cta || 'No CTA generated'}</div>
+                        
                         <div class="section-label" style="margin-top: 16px;">Pinned Comment</div>
                         <div class="beat-card" style="padding: 12px; border: 1px solid var(--clr-primary-500);">${data.facebook_pinned_comment || ''}</div>
+
+                        ${data.facebook_metadata ? `
+                        <div class="metadata-grid" style="margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.8em; opacity: 0.7;">
+                            <div><strong>Intent:</strong> ${data.facebook_metadata.post_intent}</div>
+                            <div><strong>Time:</strong> ${data.facebook_metadata.recommended_post_time}</div>
+                        </div>` : ''}
                     </div>
+
                     <div class="view-section" style="margin-top: 12px;">
                         <div class="section-label"><i data-lucide="users"></i> Facebook Groups (Conversational)</div>
                         <div class="cta-box" style="background: rgba(255,255,255,0.03); border-color: var(--clr-primary-400); color: white;">
-                             ${(data.facebook_group_post || '').replace(/\n/g, '<br>')}
+                             ${(data.facebook_group_post_body || '').replace(/\n/g, '<br>')}
                         </div>
-                        <div style="margin-top: 10px; font-size: 0.85em;">
-                            <strong>Guidance:</strong> ${data.group_posting_guidance || 'No specific guidance.'}
+                        <div style="margin-top: 12px;">
+                            <strong>Discussion Prompt:</strong><br>${data.facebook_group_discussion_prompt || 'None'}
                         </div>
+                        <div style="margin-top: 10px; font-size: 0.85em; background: rgba(255,165,0,0.1); padding: 8px; border-radius: 4px;">
+                            <strong>Safety Notes:</strong> ${data.facebook_group_safety_notes || 'No specific guidance.'}
+                        </div>
+                        ${data.facebook_group_metadata ? `
+                        <div class="metadata-grid" style="margin-top: 10px; display: flex; gap: 15px; font-size: 0.75em; opacity: 0.6;">
+                            <span><strong>Safe Score:</strong> ${data.facebook_group_metadata.group_safe_score}</span>
+                            <span><strong>Delay:</strong> ${data.facebook_group_metadata.recommended_delay}</span>
+                        </div>` : ''}
                     </div>
                 `;
                 break;
@@ -586,22 +609,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <div class="view-section">
                         <div class="section-label"><i data-lucide="instagram"></i> Instagram Reels Package</div>
-                        <div class="section-label">Reel Script (Text Beats)</div>
+                        <div class="section-label">On-Screen Text Clusters</div>
+                        <div class="beats-grid" style="margin-bottom: 16px;">
+                            ${(data.ig_on_screen_text || []).map((text, i) => `<div class="beat-card"><div class="beat-number">C${i + 1}</div>${text}</div>`).join('')}
+                        </div>
+
+                        <div class="section-label">Full Reel Script</div>
                         <div class="beats-grid">
                             ${(data.ig_reel_script || []).map(b => `<div class="beat-card"><div class="beat-number">${b.beat}</div>${b.text}</div>`).join('')}
                         </div>
+
                         <div class="section-label" style="margin-top: 16px;">Caption & Hashtags</div>
                         <div class="article-body" style="font-size: 0.9em; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
                             ${(data.ig_caption || '').replace(/\n/g, '<br>')}
                             <div style="margin-top: 8px; color: var(--clr-primary-400);">${(data.ig_hashtags || []).join(' ')}</div>
                         </div>
-                        <div class="section-label" style="margin-top: 16px;">Seeding & Pins</div>
+
+                        <div class="section-label" style="margin-top: 16px;">Engagement</div>
                         <div class="beat-card" style="border-left: 4px solid #e4405f;">
-                            <strong>Pin:</strong> ${data.ig_pin_comment || 'None'}
+                            <strong>Seed Question:</strong> ${data.ig_seed_comment || 'None'}
                         </div>
-                        <ul style="margin-top: 8px; font-size: 0.85em; opacity: 0.8; padding-left: 20px;">
-                            ${(data.ig_seed_comments || []).map(c => `<li>${c}</li>`).join('')}
-                        </ul>
+
+                        ${data.ig_metadata ? `
+                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
+                            <strong>Audio:</strong> ${data.ig_metadata.audio_guidance} | <strong>Post:</strong> ${data.ig_metadata.recommended_post_time}
+                        </div>` : ''}
                     </div>
                 `;
                 break;
@@ -610,13 +642,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="view-section">
                         <div class="section-label"><i data-lucide="youtube"></i> YouTube Shorts Package</div>
                         <div class="headline-item" style="margin-bottom: 12px; background: #ff000010; border: 1px solid #ff000030;">${data.yt_title || 'No title'}</div>
-                        <div class="section-label">Script (20-40s)</div>
+                        <div class="section-label">Timestamped Script (20-40s)</div>
                         <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9em; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">${data.yt_shorts_script || ''}</pre>
-                        <div class="section-label" style="margin-top: 16px;">Engagement</div>
-                        <div class="beat-card"><strong>Pinned:</strong> ${data.yt_pinned_comment || ''}</div>
-                        <ul style="margin-top: 8px; font-size: 0.85em; opacity: 0.8; padding-left: 20px;">
-                            ${(data.yt_seed_comments || []).map(c => `<li>${c}</li>`).join('')}
-                        </ul>
+                        
+                        <div class="section-label" style="margin-top: 16px;">Description</div>
+                        <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 12px;">${data.yt_description || ''}</div>
+
+                        <div class="section-label">Engagement</div>
+                        <div class="beat-card" style="border-left: 4px solid #ff0000;"><strong>Pinned Question:</strong> ${data.yt_pinned_comment || ''}</div>
+                        
+                        ${data.yt_metadata ? `
+                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
+                            <strong>Hook Check:</strong> ${data.yt_metadata.retention_hook_used ? '✅ Hooked' : '❌ Missing'} | <strong>Post:</strong> ${data.yt_metadata.recommended_post_time}
+                        </div>` : ''}
                     </div>
                 `;
                 break;
@@ -624,17 +662,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <div class="view-section">
                         <div class="section-label"><i data-lucide="twitter"></i> X (Twitter) Package</div>
-                        <div class="cta-box" style="background: #000; border-color: #1da1f2; color: #fff; font-size: 1.1em;">
+                        <div class="cta-box" style="background: #000; border-color: #1da1f2; color: #fff; font-size: 1.1em; margin-bottom: 20px;">
                             ${data.x_primary_post || ''}
                         </div>
-                        <div class="section-label" style="margin-top: 16px;">Thread Replies</div>
+
+                        ${(data.x_thread_replies || []).length > 0 ? `
+                        <div class="section-label">Thread Replies</div>
                         ${(data.x_thread_replies || []).map((p, i) => `
                             <div class="beat-card" style="margin-bottom: 8px;">
                                 <div class="beat-number">Reply ${i + 1}</div>
                                 ${p}
                             </div>
-                        `).join('')}
-                        <div style="color: #1da1f2; font-size: 0.8em; margin-top: 8px;">${(data.x_hashtags || []).join(' ')}</div>
+                        `).join('')}` : ''}
+
+                        <div class="section-label" style="margin-top: 16px;">Engagement Question</div>
+                        <div class="cta-box" style="padding: 10px; border-style: dotted;">${data.x_engagement_question || 'None'}</div>
+
+                        ${data.x_metadata ? `
+                        <div class="metadata-grid" style="margin-top: 10px; font-size: 0.75em; opacity: 0.6;">
+                            <strong>Type:</strong> ${data.x_metadata.post_type} | <strong>Post:</strong> ${data.x_metadata.recommended_post_time}
+                        </div>` : ''}
                     </div>
                 `;
                 break;
@@ -644,14 +691,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="section-label"><i data-lucide="layers"></i> Carousel / Slide Package</div>
                         <div class="beats-grid" style="grid-template-columns: repeat(2, 1fr);">
                             ${(data.carousel_slides || []).map(s => `
-                                <div class="beat-card" style="border: 1px solid rgba(255,255,255,0.05);">
+                                <div class="beat-card" style="border: 1px solid rgba(255,255,255,0.05); min-height: 100px;">
                                     <div class="beat-number">Slide ${s.slide || s.slide_number}</div>
                                     <div style="font-weight: bold; margin-bottom: 4px;">${s.text}</div>
-                                    <div style="font-size: 0.8em; opacity: 0.6;"><em>Visual: ${s.visual || 'No direction'}</em></div>
+                                    <div style="font-size: 0.75em; opacity: 0.6; margin-top: 8px;">
+                                        <strong>Visual:</strong> ${s.visual_direction || 'None'}<br>
+                                        <strong>Style:</strong> ${s.text_style || 'Default'}
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>
-                        <div class="section-label" style="margin-top: 16px;">Caption</div>
+                        <div class="section-label" style="margin-top: 16px;">Carousel Caption</div>
                         <div class="article-body" style="font-size: 0.9em;">${data.carousel_caption || ''}</div>
                     </div>
                 `;
@@ -659,25 +709,32 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'engagement':
                 html = `
                     <div class="view-section">
-                        <div class="section-label"><i data-lucide="message-circle"></i> Comment Seeding & Scaffolding</div>
+                        <div class="section-label"><i data-lucide="message-circle"></i> Comment Seeding & Engagement Strategy</div>
                         <div class="beat-card" style="background: rgba(16, 185, 129, 0.05); border: 1px solid var(--clr-success);">
-                            <strong>Strategy:</strong> ${data.pinned_comment_strategy || ''}
+                            <strong>Pin Recommendation:</strong> ${data.seeding_pin_recommendation || ''}
                         </div>
-                        <div class="section-label" style="margin-top: 16px;">Global Seed Comments</div>
+                        <div style="margin-top: 8px; font-size: 0.8em; opacity: 0.7;">
+                            <strong>Follow-up Timing:</strong> ${data.seeding_follow_up_timing || 'Not set'}
+                        </div>
+
+                        <div class="section-label" style="margin-top: 16px;">Platform Specific Seeds</div>
                         <div class="beats-grid">
-                            ${Object.entries(data.seed_comments_per_platform || {}).map(([p, c]) => `
-                                <div class="beat-card">
-                                    <div class="beat-number">${p}</div>
-                                    <ul style="padding-left: 14px;">${(c || []).map(li => `<li>${li}</li>`).join('')}</ul>
-                                </div>
-                            `).join('')}
+                            <div class="beat-card">
+                                <div class="beat-number">YouTube</div>
+                                <ul style="padding-left: 14px; font-size: 0.85em;">${(data.seeding_yt_comments || []).map(li => `<li>${li}</li>`).join('')}</ul>
+                            </div>
+                            <div class="beat-card">
+                                <div class="beat-number">Instagram</div>
+                                <ul style="padding-left: 14px; font-size: 0.85em;">${(data.seeding_ig_comments || []).map(li => `<li>${li}</li>`).join('')}</ul>
+                            </div>
                         </div>
+
                         <div class="section-label" style="margin-top: 16px;">Creator Reply Templates</div>
                         <div class="beats-grid" style="grid-template-columns: repeat(3, 1fr);">
-                            ${Object.entries(data.creator_reply_templates || {}).map(([type, tpl]) => `
+                            ${Object.entries(data.seeding_creator_reply_templates || {}).map(([type, tpl]) => `
                                 <div class="beat-card">
-                                    <div class="beat-number">${type}</div>
-                                    ${tpl}
+                                    <div class="beat-number" style="text-transform: capitalize;">${type}</div>
+                                    <div style="font-size: 0.85em;">${tpl}</div>
                                 </div>
                             `).join('')}
                         </div>
