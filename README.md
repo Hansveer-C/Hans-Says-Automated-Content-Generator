@@ -32,6 +32,10 @@ This application is designed as a **persistent online service**, not a one-off s
    ```
 2. **Launch Application**:
    ```bash
+   # On Windows:
+   py -m app.main
+
+   # On macOS/Linux:
    python3 -m app.main
    ```
    The app runs on `http://localhost:8000`.
