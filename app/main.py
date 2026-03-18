@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,10 +12,13 @@ from app.analysis.clustering import TopicClusterer
 import uvicorn
 import os
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "static"
+
 app = FastAPI(title="HansSays Automated Content Generator")
 
 # Mount Static Files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.on_event("startup")
 def startup_event():
@@ -52,7 +57,7 @@ def seed_sources(db: Session):
 
 @app.get("/")
 def read_root():
-    return FileResponse("static/index.html")
+    return FileResponse(STATIC_DIR / "index.html")
 
 @app.get("/items")
 def get_items(
